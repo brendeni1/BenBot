@@ -1,12 +1,31 @@
+import os
 import discord
 from dotenv import load_dotenv
 
-class DiscordClient(discord.Client):
-    async def on_ready(self):
-        print(f'Logged on as {self.user}!')
+from src import Bot
 
-    async def on_message(self, message):
-        print(f'Message from {message.author}: {message.content}')
+# Load the .env secret file.
+load_dotenv()
 
-client = DiscordClient()
-client.run(dotenv)
+# Constants.
+COGS_PATH = "src.cogs"
+BOT_TOKEN = os.getenv("DISCORD_TOKEN")
+
+# Clear terminal.
+os.system("cls")
+
+# Enable all intents for the bot.
+intents = discord.Intents.all()
+
+# Generate the bot.
+bot = Bot(intents=intents)
+
+# Log messages.
+@bot.event
+async def on_message(m):
+    print(f"{m.guild} -> {m.channel} - {m.author} said: {m.content}")
+
+bot.load_extension(COGS_PATH)
+
+# Run the bot.
+bot.run(BOT_TOKEN)
