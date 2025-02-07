@@ -35,10 +35,12 @@ class Debug(commands.Cog):
         for commandGroup in commandGroups:
             for command in commandGroup:
                 prettyCommands.append(f"/{command.name} - {command.description}")
+
+        prettyCommands.sort()
         
         reply = AppReply(
             True,
-            f'A list of commands:\n\n{"\n".join(prettyCommands)}\n\nUse the command to see available parameters and usage.'
+            f'A list of commands:\n\n{"\n".join(prettyCommands)}\n\nUse the command to see available parameters.'
         )
 
         await reply.sendReply(ctx)

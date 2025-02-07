@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 from src.classes import AppReply
 
@@ -22,3 +23,20 @@ def jsonDB(path: str) -> dict:
                 True
             )
         }
+
+def listDBs(path: str = "src/data", withFileExtensions: bool = False) -> list[str]:
+    databases = os.listdir(path)
+
+    if withFileExtensions:
+        return databases
+
+    cleanDatabases = []
+
+    for database in databases:
+        extension = (re.search(r"\S[^.]+$", database, re.I|re.M)).group()
+        
+        replaced = database.replace(extension, "")
+        
+        cleanDatabases.append(replaced)
+    
+    return cleanDatabases

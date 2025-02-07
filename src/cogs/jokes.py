@@ -2,13 +2,16 @@ import discord
 import random
 import asyncio
 import re
+
 import sys
 from discord.ext import commands
 
-from src.utils import dates
 from src.utils import db
+from src.utils import regexs
 
 from src.classes import AppReply, StandardReply
+
+INQUIRY_REGEXS = [r"^what\?*$", r"^ok$", r"^yea?$", r"^and$"]
 
 class Jokes(commands.Cog):
     def __init__(self, bot):
@@ -55,11 +58,9 @@ class Jokes(commands.Cog):
             )
 
         if not reply:
-            inquiryRegex = r"^what\?*$"
-
             reply = AppReply(
                 True,
-                f"<:sus:816524395605786624> {joke['joke']}\n\n-# Hint: Say 'what' within {self.timeout} seconds."
+                f"<:sus:816524395605786624> {joke['joke']}\n\n-# Hint: Say 'what', 'yea', 'ok', or 'and' within {self.timeout} seconds for the next part of the joke."
             )
             await reply.sendReply(ctx)
 
@@ -71,7 +72,7 @@ class Jokes(commands.Cog):
 
                 return all(
                     [
-                        re.search(inquiryRegex, message.content, re.IGNORECASE),
+                        regexs.multiRegexMatch(INQUIRY_REGEXS, message.content, re.I),
                         (message.author == ctx.author),
                         (message.author != self.bot.user),
                         (message.channel == ctx.channel)

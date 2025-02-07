@@ -1,40 +1,38 @@
-def formatSeconds(seconds):
-    # Define the time units in seconds
-    minute = 60
-    hour = 60 * minute
-    day = 24 * hour
+def formatSeconds(seconds: int):
+    """
+    Convert an integer number of seconds into a string with at most two time units.
+    
+    Examples:
+      format_duration(3025500)  --> "35d 25m"
+      format_duration(3661)     --> "1h 1m"
+      format_duration(59)       --> "59s"
+    
+    Parameters:
+      seconds (int): The total seconds (must be non-negative).
+      
+    Returns:
+      str: The formatted duration string.
+    """
+    if seconds < 0:
+        raise ValueError("Seconds must be non-negative")
+    
+    # Define units in descending order along with their corresponding number of seconds.
+    units = [
+        ('d', 86400),  # 1 day = 86400 seconds
+        ('h', 3600),   # 1 hour = 3600 seconds
+        ('m', 60),     # 1 minute = 60 seconds
+        ('s', 1)       # 1 second = 1 second
+    ]
+    
+    result = []
+    for unit, unit_seconds in units:
+        if seconds >= unit_seconds:
+            count = seconds // unit_seconds
+            seconds %= unit_seconds
+            result.append(f"{count}{unit}")
+        # Stop once we have two nonzero units.
+        if len(result) == 2:
+            break
 
-    # Calculate the breakdown
-    days = seconds // day
-    seconds %= day
-
-    hours = seconds // hour
-    seconds %= hour
-
-    minutes = seconds // minute
-    seconds %= minute
-
-    # Create a dictionary to hold the time units
-    time_units = {
-        'd': days,
-        'h': hours,
-        'm': minutes,
-        's': seconds
-    }
-
-    # Filter out units with zero value
-    non_zero_units = {k: v for k, v in time_units.items() if v > 0}
-
-    # Sort by value in descending order
-    sorted_units = sorted(non_zero_units.items(), key=lambda x: x[1], reverse=True)
-
-    # Only take the top 2 units
-    top_units = sorted_units[:2]
-
-    # Format the output
-    if len(top_units) == 0:
-        return "0 seconds"
-    elif len(top_units) == 1:
-        return f"{top_units[0][1]}{top_units[0][0]}"
-    else:
-        return f"{top_units[1][1]}{top_units[1][0]} {top_units[0][1]}{top_units[0][0]}"
+    # If all units are zero, return "0s".
+    return " ".join(result) if result else "0s"
