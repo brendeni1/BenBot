@@ -2,6 +2,7 @@ import discord
 import random
 import asyncio
 import re
+import sys
 from discord.ext import commands
 
 from src.utils import dates
@@ -96,4 +97,9 @@ class Jokes(commands.Cog):
         
 
 def setup(bot):
-    bot.add_cog(Jokes(bot))
+    currentFile = sys.modules[__name__]
+    
+    for name in dir(currentFile):
+        obj = getattr(currentFile, name)
+        if isinstance(obj, type) and obj.__module__ == currentFile.__name__:
+            bot.add_cog(obj(bot))

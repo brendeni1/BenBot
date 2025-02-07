@@ -1,5 +1,6 @@
 import discord
 import time
+import sys
 from discord.ext import commands
 
 from src.utils import dates
@@ -43,4 +44,9 @@ class Debug(commands.Cog):
         await reply.sendReply(ctx)
 
 def setup(bot):
-    bot.add_cog(Debug(bot))
+    currentFile = sys.modules[__name__]
+    
+    for name in dir(currentFile):
+        obj = getattr(currentFile, name)
+        if isinstance(obj, type) and obj.__module__ == currentFile.__name__:
+            bot.add_cog(obj(bot))
