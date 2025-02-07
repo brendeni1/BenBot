@@ -24,17 +24,30 @@ class DataModal(discord.ui.Modal):
     def __init__(self, title: str, custom_id: int = None, timeout: int = None):
         super().__init__(title=title, custom_id=custom_id, timeout=timeout)
 
+    async def callback(self, interaction):
+        await interaction.respond(f'Your joke is almost ready...', ephemeral=True)
+
 class SelectGuildMember(discord.ui.Select):
-    def __init__(self, members: list[discord.Member]):
-        # Create a list of options; note that Discord limits the number of options.
-        options = [discord.SelectOption(label="This joke is not directed towards a member.", value="0")]
+    def __init__(self, members: list[discord.Member], placeholderTitle: str, noMemberOption: bool):
+        options = []
+
+        if noMemberOption:
+            options = [discord.SelectOption(label="DO NOT associate with a member.", value="0")]
         
         for member in members[:24]:
             options.append(discord.SelectOption(label=member.display_name, value=str(member.id)))
 
-        super().__init__(placeholder="Select the member which the joke is directed towards...", options=fla(options))
+        super().__init__(placeholder=placeholderTitle, options=options)
+
+    async def callback(self, interaction: discord.Interaction): # the function called when the user is done selecting options
+        # await interaction.response.send_message()
+        await interaction.respond(f"Associated with <@{self.values[0]}>", ephemeral=True)
+        
+        self.view.stop()
+        self.disabled = True     
+        await interaction.message.delete()
 
 class SelectGuildMemberView(discord.ui.View):
-    def __init__(self, members: list[discord.Member]):
-        super().__init__()
-        self.add_item(SelectGuildMember(members))
+    def __init__(self, members: list[discord.Member], placeholderTitle: str, noMemberOption: bool = False):
+        super().__init__(timeout=30, disable_on_timeout=True)
+        self.add_item(SelectGuildMember(members, placeholderTitle, noMemberOption))
