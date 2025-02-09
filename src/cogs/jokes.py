@@ -1,7 +1,7 @@
 import discord
 import random
-import asyncio
 import re
+import asyncio
 
 import sys
 from discord.ext import commands
@@ -9,7 +9,7 @@ from discord.ext import commands
 from src.utils import db
 from src.utils import regexs
 
-from src.classes import AppReply, StandardReply
+from src.classes import *
 
 INQUIRY_REGEXS = [r"^what\?*$", r"^ok$", r"^yea?$", r"^and$"]
 
@@ -29,22 +29,23 @@ class Jokes(commands.Cog):
             required=False
         ) # type: ignore
     ):
-        reply = None
         joke = None
 
-        jokes: list[dict] = db.jsonDB("jokes")
+        debugReply = EmbedReply("Jokes - Error", "jokes", True)
 
-        if isinstance(jokes, AppReply):
-            # Error occured!
-            await jokes.sendReply(ctx)
+        try:
+            jokes: list[dict] = db.jsonDB("jokes")
+        except FileNotFoundError:
+            debugReply.description = "There was an error finding the jokes database."
+            await debugReply.send(ctx)
             return
         
         if expense and jokes:
             if expense.id not in [joke["expense"] for joke in jokes]:
-                reply = AppReply(
-                    False,
-                    "<:bensad:801246370106179624> That user doesn't have any jokes associated with them..."
-                )
+                debugReply.description = "<:bensad:801246370106179624> That user doesn't have any jokes associated with them..."
+                
+                await debugReply.send(ctx)
+                return
             else:
                 jokesFiltered = list(filter(lambda joke: joke["expense"] == expense.id, jokes))
 
@@ -52,50 +53,40 @@ class Jokes(commands.Cog):
         elif jokes:
             joke = random.choice(jokes)
         else:
-            reply = AppReply(
-                False,
-                f"<:bensad:801246370106179624> There aren't any jokes in the file!"
+            debugReply.description = "<:bensad:801246370106179624> There aren't any jokes in the file!"
+            await debugReply.send(ctx)
+        
+        initialReply = EmbedReply("Jokes", "jokes")
+
+        initialReply.description = f"<:sus:816524395605786624> {joke['joke']}"
+        initialReply.set_footer(text=f"Hint: Say 'what', 'yea', 'ok', or 'and' within {self.timeout} seconds for the next part of the joke.")
+
+        await initialReply.send(ctx)
+
+        def check(message: discord.Message):
+            if (message.author != ctx.author) and (message.channel == ctx.channel) and (message.author != self.bot.user):
+                badAuthorReply = EmbedReply("Jokes - Wrong person!!", "jokes", True, description="Find your own joke pal...")
+                asyncio.get_event_loop().create_task(badAuthorReply.send(ctx, quote=False))
+
+            return all(
+                [
+                    regexs.multiRegexMatch(INQUIRY_REGEXS, message.content, re.I),
+                    (message.author == ctx.author),
+                    (message.author != self.bot.user),
+                    (message.channel == ctx.channel)
+                ]
             )
+        
+        punchlineReply = EmbedReply("Jokes", "jokes", description=f"<:joshrad:801246993682137108> {joke["answer"]}")
 
-        if not reply:
-            reply = AppReply(
-                True,
-                f"<:sus:816524395605786624> {joke['joke']}\n\n-# Hint: Say 'what', 'yea', 'ok', or 'and' within {self.timeout} seconds for the next part of the joke."
-            )
-            await reply.sendReply(ctx)
-
-            def check(message: discord.Message):
-                if (message.author != ctx.author) and (message.channel == ctx.channel) and (message.author != self.bot.user):
-                    badAuthorReply = StandardReply(False, "Find your own joke pal...")
-                    
-                    asyncio.get_event_loop().create_task(badAuthorReply.sendReply(ctx))
-
-                return all(
-                    [
-                        regexs.multiRegexMatch(INQUIRY_REGEXS, message.content, re.I),
-                        (message.author == ctx.author),
-                        (message.author != self.bot.user),
-                        (message.channel == ctx.channel)
-                    ]
-                )
+        try:
+            await self.bot.wait_for("message", check=check, timeout=self.timeout)
             
-            try:
-                prompt = await self.bot.wait_for("message", check=check, timeout=self.timeout)
-                
-                reply = AppReply(
-                    True,
-                    f"<:joshrad:801246993682137108> {joke["answer"]}"
-                )
-            except TimeoutError:
-                reply = AppReply(
-                False,
-                f"<:bensad:801246370106179624> You left me hanging...",
-                "TimeoutError",
-                True
-            )
-        
-        await reply.sendReply(ctx)
-        
+            await punchlineReply.send(ctx)
+        except TimeoutError:
+            timeoutReply = EmbedReply("Jokes - Timeout Error", "jokes", error=True, description="<:bensad:801246370106179624> You left me hanging...")
+            
+            await timeoutReply.send(ctx)
 
 def setup(bot):
     currentFile = sys.modules[__name__]

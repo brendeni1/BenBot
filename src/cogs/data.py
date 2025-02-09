@@ -10,6 +10,20 @@ from src.classes import *
 
 DATABASES: list[str] = db.listDBs()
 
+class JokeModal(discord.ui.Modal):
+    def __init__(self, title: str, custom_id: int = None, timeout: int = None):
+        super().__init__(title=title, custom_id=custom_id, timeout=timeout)
+
+    async def callback(self, interaction):
+        jokeReceivedEmbed=discord.Embed(title="Joke Recieved", description="Your joke has been recieved. Please associate it with a member below. If your joke isn't targeted towards someone, choose 'No Member' in the dropdown.", color=0xff2600)
+        jokeReceivedEmbed.set_author(name="BenBot - AddData")
+        jokeReceivedEmbed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1337974783396286575.webp?size=96")
+        jokeReceivedEmbed.add_field(name="Joke", value=self.children[0], inline=False)
+        jokeReceivedEmbed.add_field(name="Punchline", value=self.children[1], inline=False)
+        jokeReceivedEmbed.add_field(name="At The Expense Of", value="Not Set - See Below.", inline=False)
+
+        await interaction.response.send_message(embed=jokeReceivedEmbed)
+
 class Data(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -26,7 +40,7 @@ class Data(commands.Cog):
         ) # type: ignore
     ):
         if database == "jokes":
-            modal = DataModal("Enter the details of the joke.")
+            modal = JokeModal("Enter the details of the joke.")
 
             modal.add_item(discord.ui.InputText(label="First part of the joke", style=discord.InputTextStyle.long))
             modal.add_item(discord.ui.InputText(label="Second part of the joke", style=discord.InputTextStyle.long))
@@ -38,7 +52,7 @@ class Data(commands.Cog):
 
             humanMembers = guild.getAllHumanMembers(ctx)
 
-            memberView = SelectGuildMemberView(humanMembers, "Select a server member...", True)
+            memberView = SelectGuildMemberView(humanMembers, "Select a server member...", noMemberOption=True)
 
             await ctx.respond("Please select the member that the joke is making fun of:\n", view=memberView)
             await memberView.wait()
@@ -46,20 +60,14 @@ class Data(commands.Cog):
             selection = memberView.children[0]
             expense = selection.values[0]
 
-            reply = AppReply(
-                True,
-                f"{joke=}{answer=}<@{expense}>"
-            )
-
-            await reply.sendReply(ctx)
-
-            # TODO: ADD CATCH FOR THE "DO NOT ASSOCIATE MEMBER (id:0) AND MAKE IT INTEGRATE WITH THE JSON FILE SO THAT THE JOKES ACTUALLY GET RECORDED."
+            # TODO: ADD CATCH FOR THE "DO NOT ASSOCIATE MEMBER (id:0) AND MAKE IT INTEGRATE WITH A NEW DB FILE SO THAT THE JOKES ACTUALLY GET RECORDED."
 
 
 def setup(bot):
-    currentFile = sys.modules[__name__]
+    pass
+    # currentFile = sys.modules[__name__]
     
-    for name in dir(currentFile):
-        obj = getattr(currentFile, name)
-        if isinstance(obj, type) and obj.__module__ == currentFile.__name__:
-            bot.add_cog(obj(bot))
+    # for name in dir(currentFile):
+    #     obj = getattr(currentFile, name)
+    #     if isinstance(obj, type) and obj.__module__ == currentFile.__name__:
+    #         bot.add_cog(obj(bot))

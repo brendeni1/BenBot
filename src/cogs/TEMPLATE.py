@@ -5,8 +5,6 @@ import sys
 from src.utils import dates
 from src.utils import db
 
-from src.classes import AppReply, StandardReply
-
 class MyCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot

@@ -2,30 +2,23 @@ import json
 import os
 import re
 
-from src.classes import AppReply
-
 def jsonDB(path: str) -> dict:
     if ".json" not in path:
         path = f"src/data/{path}.json"
 
-    try:
-        with open(path, "r") as database:
-            loadedJSON = json.load(database)
+    with open(path, "r") as database:
+        loadedJSON = json.load(database)
 
-            return loadedJSON
-    except FileNotFoundError:
-        return{
-            "success": False,
-            "reply": AppReply(
-                False,
-                f"<:bensad:801246370106179624> That command couldn't be executed. (utils/db.py: FileNotFoundError using {path})",
-                "FileNotFoundError",
-                True
-            )
-        }
+        return loadedJSON
 
-def listDBs(path: str = "src/data", withFileExtensions: bool = False) -> list[str]:
+def listDBs(path: str = "src/data", withFileExtensions: bool = False, filterByExtension: str = None) -> list[str]:
     databases = os.listdir(path)
+
+    if not databases:
+        return None
+
+    if filterByExtension:
+        databases = filter(lambda database: database.endswith(filterByExtension), databases)
 
     if withFileExtensions:
         return databases

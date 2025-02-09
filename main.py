@@ -8,6 +8,7 @@ from src import Bot
 load_dotenv()
 
 # Constants.
+OWNER = int(os.getenv("OWNER"))
 COGS_PATH = "src.cogs"
 BOT_TOKEN = os.getenv("DISCORD_TOKEN")
 
@@ -18,7 +19,7 @@ os.system("cls")
 intents = discord.Intents.all()
 
 # Generate the bot.
-bot = Bot(intents=intents)
+bot = Bot(intents=intents, owner_id=OWNER)
 
 # Log messages.
 @bot.event

@@ -4,7 +4,8 @@ import sys
 from discord.ext import commands
 
 from src.utils import dates
-from src.classes import AppReply
+
+from src.classes import *
 
 class Debug(commands.Cog):
     def __init__(self, bot):
@@ -17,12 +18,11 @@ class Debug(commands.Cog):
         uptime = dates.formatSeconds(round(time.time() - self.timeStarted))
         latency = round(self.bot.latency * 1000)
 
-        reply = AppReply(
-            True,
-            f"<:zamn:1089027418959904809> Pong! Latency: {latency}ms. Uptime: {uptime}. For a list of commands and a short description, use '/commands'. Source code: https://github.com/brendeni1/BenBot"
-        )
+        formatted = f"<:zamn:1089027418959904809> Pong! Latency: {latency}ms. Uptime: {uptime}.\n\nFor a list of commands and a short description, use '/commands'.\n\nSource code: https://github.com/brendeni1/BenBot"
 
-        await reply.sendReply(ctx)
+        reply = EmbedReply("Ping", "debug", description=formatted)
+
+        await reply.send(ctx)
     
     @discord.slash_command(description = "Returns a list of commands.", guild_ids=[799341195109203998])
     async def commands(self, ctx):
@@ -37,13 +37,14 @@ class Debug(commands.Cog):
                 prettyCommands.append(f"/{command.name} - {command.description}")
 
         prettyCommands.sort()
-        
-        reply = AppReply(
-            True,
-            f'A list of commands:\n\n{"\n".join(prettyCommands)}\n\nUse the command to see available parameters.'
-        )
 
-        await reply.sendReply(ctx)
+        formatted = f'A list of commands:\n\n{"\n".join(prettyCommands)}'
+
+        reply = EmbedReply("Commands", "debug", description=formatted)
+
+        reply.set_footer(text="Use the command to see available parameters.")
+
+        await reply.send(ctx)
 
 def setup(bot):
     currentFile = sys.modules[__name__]
