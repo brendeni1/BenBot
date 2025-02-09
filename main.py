@@ -23,7 +23,10 @@ bot = Bot(intents=intents, owner_id=OWNER)
 
 # Log messages.
 @bot.event
-async def on_message(m):
+async def on_message(m: discord.Message):
+    if m.author == bot.user:
+        return
+    
     print(f"{m.guild} -> {m.channel} - {m.author} said: {m.content}")
 
 bot.load_extension(COGS_PATH)
