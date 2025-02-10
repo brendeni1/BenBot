@@ -1,3 +1,5 @@
+import datetime
+
 def formatSeconds(seconds: int):
     """
     Convert an integer number of seconds into a string with at most two time units.
@@ -36,3 +38,21 @@ def formatSeconds(seconds: int):
 
     # If all units are zero, return "0s".
     return " ".join(result) if result else "0s"
+
+def formatSimpleDate(*, timestamp = None, includeTime: bool = True, timeNow: bool = False) -> str:
+    if not timestamp and not timeNow:
+        raise ValueError("No timestamp provided to src.utils.dates.formatSimpleDate.")
+    
+    if timeNow:
+        timestamp = datetime.datetime.now()
+    
+    if not isinstance(timestamp, datetime.datetime):
+        timestamp = datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+
+    if includeTime:
+        formattedDate = timestamp.strftime("%b %#d %Y %#I:%M %p")
+    else:
+        formattedDate = timestamp.strftime("%b %-d %Y")
+    
+    return formattedDate
+    

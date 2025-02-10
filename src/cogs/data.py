@@ -8,8 +8,6 @@ from src.utils import guild
 
 from src.classes import *
 
-DATABASES: list[str] = db.listDBs()
-
 class JokeModal(discord.ui.Modal):
     def __init__(self, title: str, custom_id: int = None, timeout: int = None):
         super().__init__(title=title, custom_id=custom_id, timeout=timeout)
@@ -35,7 +33,7 @@ class Data(commands.Cog):
         database: discord.Option(
             str,
             description="Provide a database to add data to.",
-            choices=DATABASES,
+            choices=db.listDBs(),
             required=True
         ) # type: ignore
     ):
@@ -60,7 +58,7 @@ class Data(commands.Cog):
             selection = memberView.children[0]
             expense = selection.values[0]
 
-            # TODO: ADD CATCH FOR THE "DO NOT ASSOCIATE MEMBER (id:0) AND MAKE IT INTEGRATE WITH A NEW DB FILE SO THAT THE JOKES ACTUALLY GET RECORDED."
+            # TODO: MAKE THIS SHIT WORK!!!!!! SQL IS UP AND RUNNIGN!!!
 
 
 def setup(bot):

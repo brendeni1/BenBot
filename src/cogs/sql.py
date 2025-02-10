@@ -7,7 +7,7 @@ from src.utils import db
 
 from src.classes import *
 
-DATABASES: list[str] = db.listDBs(filterByExtension=".db")
+MAX_FIELDS_EMBED: int = 25
 
 class Sql(commands.Cog):
     def __init__(self, bot):
@@ -21,7 +21,7 @@ class Sql(commands.Cog):
         database: discord.Option(
             str,
             description="Pick a database to execute on.",
-            choices=DATABASES
+            choices=db.listDBs(filterByExtension=".db")
         ), # type: ignore
         action: discord.Option(
             str,
@@ -35,12 +35,64 @@ class Sql(commands.Cog):
         limit: discord.Option(
             int,
             description="Provide a limit of results (GET ONLY).",
-            required=False
+            default=0
         ) # type: ignore
-    ):
-        reply = EmbedReply("test", "sql", description="test")
-        await reply.send(ctx)
-        # TODO: MAKE IT SO THIS COMMAND ACTUALLY DOES SHIT AND YEA>:)
+    ):        
+        databaseConnection: LocalDatabase = LocalDatabase(database)
+
+        if action == "get":
+            try:
+                reply = EmbedReply("SQL - Get", "sql")
+
+                results = databaseConnection.get(query, limit)
+
+                if len(results) >= MAX_FIELDS_EMBED:
+                    resultsTrimmed = results[:MAX_FIELDS_EMBED - 2]
+                    
+                    resultsLeft = len(results[MAX_FIELDS_EMBED - 1:])
+
+                    results.append(f"... and {resultsLeft} more")
+                
+                reply.description = f"Results of your query ({query}):"
+                
+                for num, result in enumerate(results, 1):
+                    reply.add_field(name=f"Row {num}", value=", ".join([str(value) for value in result]), inline=False)
+                
+                await reply.send(ctx)
+            except Exception as e:
+                reply = EmbedReply("SQL - Error", "sql", True, description=e)
+
+                await reply.send(ctx)
+        elif action == "setOne":
+            try:
+                reply = EmbedReply("SQL - Set One", "sql")
+
+                success = databaseConnection.setOne(query)
+                
+                reply.description = f"Successfully set your data ({query})."
+
+                await reply.send(ctx)
+            except Exception as e:
+                reply = EmbedReply("SQL - Error", "sql", True, description=e)
+
+                await reply.send(ctx)
+        elif action == "query":
+            try:
+                reply = EmbedReply("SQL - Query", "sql")
+
+                success = databaseConnection.query(query)
+                
+                reply.description = f"Successfully ran your query ({query})."
+
+                await reply.send(ctx)
+            except Exception as e:
+                reply = EmbedReply("SQL - Error", "sql", True, description=e)
+
+                await reply.send(ctx)
+        else:
+            reply = EmbedReply("SQL - Error", "sql", True, description="You somehow ran an ACTION parameter which doesn't exist.")
+
+            await reply.send(ctx)
     
     @sql.error
     async def onError(self, ctx: discord.ApplicationContext, error: discord.DiscordException):

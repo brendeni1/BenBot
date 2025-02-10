@@ -41,7 +41,7 @@ class EmbedReply(discord.Embed):
             await ctx.send(embed=self, **kwargs)
 
 class LocalDatabase:
-    def __init__(self, database: str):
+    def __init__(self, database: str = "db"):
         database = f"{database}.db"
 
         availableDatabases = listDBs(withFileExtensions=True)
@@ -53,7 +53,7 @@ class LocalDatabase:
 
     def get(self, query: str, limit: int = 0) -> list:
         try:
-            connection = sqlite3.connect(self.database)
+            connection = sqlite3.connect(f"src/data/{self.database}")
             cursor = connection.cursor()
 
             cursor.execute(query)
@@ -63,45 +63,69 @@ class LocalDatabase:
             else:
                 results = cursor.fetchall()
 
-            connection.commit()
-
             return results
+        finally:
+            cursor.close()
+            connection.close()
+    
+    def listTables(self) -> list:
+        try:
+            connection = sqlite3.connect(f"src/data/{self.database}")
+            cursor = connection.cursor()
+
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+
+            results = cursor.fetchall()
+
+            resultsFiltered = []
+
+            for result in results:
+                if result[0] != "sqlite_sequence":
+                    resultsFiltered.append(result[0])
+
+            return resultsFiltered
         finally:
             cursor.close()
             connection.close()
 
     def setOne(self, query: str):
         try:
-            connection = sqlite3.connect(self.database)
+            connection = sqlite3.connect(f"src/data/{self.database}")
             cursor = connection.cursor()
 
             cursor.execute(query)
 
             connection.commit()
+
+            return True
         finally:
             cursor.close()
             connection.close()
     
     def setMany(self, query: str, data: list[tuple]):
         try:
-            connection = sqlite3.connect(self.database)
+            connection = sqlite3.connect(f"src/data/{self.database}")
             cursor = connection.cursor()
 
             cursor.executemany(query, data)
 
             connection.commit()
+
+            return True
         finally:
             cursor.close()
             connection.close()
 
     def query(self, query: str):
         try:
-            connection = sqlite3.connect(self.database)
+            connection = sqlite3.connect(f"src/data/{self.database}")
             cursor = connection.cursor()
 
             cursor.execute(query)
 
             connection.commit()
+
+            return True
         finally:
             cursor.close()
             connection.close()

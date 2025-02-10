@@ -6,8 +6,8 @@ import asyncio
 import sys
 from discord.ext import commands
 
-from src.utils import db
 from src.utils import regexs
+from src.utils import dates
 
 from src.classes import *
 
@@ -34,32 +34,44 @@ class Jokes(commands.Cog):
         debugReply = EmbedReply("Jokes - Error", "jokes", True)
 
         try:
-            jokes: list[dict] = db.jsonDB("jokes")
-        except FileNotFoundError:
-            debugReply.description = "There was an error finding the jokes database."
+            database: LocalDatabase = LocalDatabase()
+            
+            tables = database.listTables()
+
+            if "jokes" not in tables:
+                raise Exception("No jokes table...")
+            
+            jokes: list[tuple] = database.get("SELECT * FROM jokes")
+            
+        except Exception as e:
+            debugReply.description = f"There was an error loading the jokes database.\n\n{e}"
+            
             await debugReply.send(ctx)
             return
         
         if expense and jokes:
-            if expense.id not in [joke["expense"] for joke in jokes]:
+            filteredJokes: list[tuple] = database.get(f"SELECT * FROM jokes WHERE expense={expense.id}")
+            
+            if not filteredJokes:
                 debugReply.description = "<:bensad:801246370106179624> That user doesn't have any jokes associated with them..."
                 
                 await debugReply.send(ctx)
                 return
             else:
-                jokesFiltered = list(filter(lambda joke: joke["expense"] == expense.id, jokes))
-
-                joke = random.choice(jokesFiltered)
+                joke = random.choice(filteredJokes)
         elif jokes:
             joke = random.choice(jokes)
         else:
             debugReply.description = "<:bensad:801246370106179624> There aren't any jokes in the file!"
             await debugReply.send(ctx)
         
-        initialReply = EmbedReply("Jokes", "jokes")
+        initialReply = EmbedReply("Jokes - Setup", "jokes")
 
-        initialReply.description = f"<:sus:816524395605786624> {joke['joke']}"
-        initialReply.set_footer(text=f"Hint: Say 'what', 'yea', 'ok', or 'and' within {self.timeout} seconds for the next part of the joke.")
+        jokeID, jokeCreatedBy, jokeCreatedAt, jokeCreatedGuild, jokeCreatedChannel, jokeSetup, jokePunchline, jokeExpense = joke
+        jokeCreatedAt = dates.formatSimpleDate(timestamp=jokeCreatedAt)
+
+        initialReply.description = f"<:sus:816524395605786624> {jokeSetup}"
+        initialReply.set_footer(text=f"Hint: Say 'what', 'yea', 'ok', or 'and' within {self.timeout} seconds for the punchline.")
 
         await initialReply.send(ctx)
 
@@ -77,7 +89,8 @@ class Jokes(commands.Cog):
                 ]
             )
         
-        punchlineReply = EmbedReply("Jokes", "jokes", description=f"<:joshrad:801246993682137108> {joke["answer"]}")
+        punchlineReply = EmbedReply("Jokes - Punchline", "jokes", description=f"<:joshrad:801246993682137108> {jokePunchline}")
+        punchlineReply.set_footer(text=f"Created {jokeCreatedAt} · By {(self.bot.get_user(jokeCreatedBy)).name}")
 
         try:
             await self.bot.wait_for("message", check=check, timeout=self.timeout)
