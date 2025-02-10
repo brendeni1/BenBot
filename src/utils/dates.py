@@ -55,4 +55,15 @@ def formatSimpleDate(*, timestamp = None, includeTime: bool = True, timeNow: boo
         formattedDate = timestamp.strftime("%b %-d %Y")
     
     return formattedDate
+
+def simpleDateObj(*, timestamp = None, timeNow: bool = False) -> str:
+    if not timestamp and not timeNow:
+        raise ValueError("No timestamp provided to src.utils.dates.formatSimpleDate.")
     
+    if timeNow:
+        timestamp = datetime.datetime.now()
+    
+    if not isinstance(timestamp, datetime.datetime):
+        timestamp = datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+
+    return timestamp

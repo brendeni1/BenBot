@@ -32,7 +32,7 @@ class Jokes(commands.Cog):
         ), # type: ignore
         id: discord.Option(
             int,
-            description="Pick a joke by the joke's ID. If provided, overrides expense parameter.",
+            description="Pick a joke by ID. To see IDs: /view table:jokes. Overrides expense parameter.",
             required=False
         ) # type: ignore
     ):
@@ -87,7 +87,7 @@ class Jokes(commands.Cog):
         jokeCreatedAt = dates.formatSimpleDate(timestamp=jokeCreatedAt)
 
         initialReply.description = f"<:sus:816524395605786624> {jokeSetup}"
-        initialReply.set_footer(text=f"Hint: Say 'what', 'yea', 'ok', or 'and' within {self.timeout} seconds for the punchline.")
+        initialReply.set_footer(text=f"Joke ID: {jokeID} · Hint: Say 'what', 'yea', 'ok', or 'and' within {self.timeout} seconds for the punchline.")
 
         await initialReply.send(ctx)
 
@@ -106,7 +106,7 @@ class Jokes(commands.Cog):
             )
         
         punchlineReply = EmbedReply("Jokes - Punchline", "jokes", description=f"<:joshrad:801246993682137108> {jokePunchline}")
-        punchlineReply.set_footer(text=f"Created {jokeCreatedAt} · By {(self.bot.get_user(jokeCreatedBy)).name}")
+        punchlineReply.set_footer(text=f"Joke ID: {jokeID} · Created {jokeCreatedAt} · By {(self.bot.get_user(jokeCreatedBy)).name}")
 
         try:
             await self.bot.wait_for("message", check=check, timeout=self.timeout)

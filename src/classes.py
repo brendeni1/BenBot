@@ -26,12 +26,13 @@ class SelectGuildMember(discord.ui.Select):
             await interaction.respond(f"Associated with <@{self.values[0]}>", ephemeral=True)
         
         self.view.stop()
-        self.disabled = True     
+        self.disabled = True
+
         await interaction.message.delete()
 
 class SelectGuildMemberView(discord.ui.View):
     def __init__(self, members: list[discord.Member], placeholderTitle: str, noMemberOption: bool = False):
-        super().__init__(timeout=30, disable_on_timeout=True)
+        super().__init__(timeout=60, disable_on_timeout=True)
         self.add_item(SelectGuildMember(members, placeholderTitle, noMemberOption))
 
 class EmbedReply(discord.Embed):
@@ -154,7 +155,21 @@ class LocalDatabase:
             cursor.close()
             connection.close()
 
-    def query(self, query: str):
+    def query(self, query: str, data: list[tuple]):
+        try:
+            connection = sqlite3.connect(f"src/data/{self.database}")
+            cursor = connection.cursor()
+
+            cursor.execute(query, data)
+
+            connection.commit()
+
+            return True
+        finally:
+            cursor.close()
+            connection.close()
+
+    def queryRaw(self, query: str):
         try:
             connection = sqlite3.connect(f"src/data/{self.database}")
             cursor = connection.cursor()

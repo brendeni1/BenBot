@@ -82,7 +82,7 @@ class Sql(commands.Cog):
             try:
                 reply = EmbedReply("SQL - Query", "sql")
 
-                success = databaseConnection.query(query)
+                success = databaseConnection.queryRaw(query)
                 
                 reply.description = f"Successfully ran your query ({query})."
 
