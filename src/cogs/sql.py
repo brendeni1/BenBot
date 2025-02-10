@@ -10,6 +10,8 @@ from src.classes import *
 MAX_FIELDS_EMBED: int = 25
 
 class Sql(commands.Cog):
+    ISCOG = True
+
     def __init__(self, bot):
         self.bot = bot
     
@@ -44,12 +46,12 @@ class Sql(commands.Cog):
             try:
                 reply = EmbedReply("SQL - Get", "sql")
 
-                results = databaseConnection.get(query, limit)
+                results = databaseConnection.getRaw(query, limit)
 
                 if len(results) >= MAX_FIELDS_EMBED:
-                    resultsTrimmed = results[:MAX_FIELDS_EMBED - 2]
+                    resultsTrimmed = results[:MAX_FIELDS_EMBED - 1]
                     
-                    resultsLeft = len(results[MAX_FIELDS_EMBED - 1:])
+                    resultsLeft = len(results[MAX_FIELDS_EMBED:])
 
                     results.append(f"... and {resultsLeft} more")
                 
@@ -67,7 +69,7 @@ class Sql(commands.Cog):
             try:
                 reply = EmbedReply("SQL - Set One", "sql")
 
-                success = databaseConnection.setOne(query)
+                success = databaseConnection.setOneRaw(query)
                 
                 reply.description = f"Successfully set your data ({query})."
 
@@ -107,5 +109,7 @@ def setup(bot):
     
     for name in dir(currentFile):
         obj = getattr(currentFile, name)
+
         if isinstance(obj, type) and obj.__module__ == currentFile.__name__:
-            bot.add_cog(obj(bot))
+            if obj.ISCOG:
+                bot.add_cog(obj(bot))

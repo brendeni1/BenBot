@@ -9,6 +9,8 @@ from src.utils import guild
 from src.classes import *
 
 class JokeModal(discord.ui.Modal):
+    ISCOG = False
+
     def __init__(self, title: str, custom_id: int = None, timeout: int = None):
         super().__init__(title=title, custom_id=custom_id, timeout=timeout)
 
@@ -23,6 +25,9 @@ class JokeModal(discord.ui.Modal):
         await interaction.response.send_message(embed=jokeReceivedEmbed)
 
 class Data(commands.Cog):
+    ISCOG = True
+    tables = LocalDatabase().listTables()
+
     def __init__(self, bot):
         self.bot = bot
     
@@ -30,23 +35,24 @@ class Data(commands.Cog):
     async def adddata(
         self,
         ctx: discord.ApplicationContext,
-        database: discord.Option(
+        table: discord.Option(
             str,
-            description="Provide a database to add data to.",
-            choices=db.listDBs(),
+            description="Provide a database table to add data to.",
+            choices=tables,
             required=True
         ) # type: ignore
     ):
-        if database == "jokes":
+        if table == "jokes":
             modal = JokeModal("Enter the details of the joke.")
 
-            modal.add_item(discord.ui.InputText(label="First part of the joke", style=discord.InputTextStyle.long))
-            modal.add_item(discord.ui.InputText(label="Second part of the joke", style=discord.InputTextStyle.long))
+            modal.add_item(discord.ui.InputText(label="Enter the joke's setup line:", style=discord.InputTextStyle.long))
+            modal.add_item(discord.ui.InputText(label="Enter the joke's punchline:", style=discord.InputTextStyle.long))
 
             await ctx.send_modal(modal)
             await modal.wait()
 
-            joke, answer = [child.value for child in modal.children]
+            setup, punchline = [child.value for child in modal.children]
+            createdBy, createdGuild, createdChannel = ctx.author.id, ctx.guild, ctx.channel
 
             humanMembers = guild.getAllHumanMembers(ctx)
 
@@ -58,14 +64,35 @@ class Data(commands.Cog):
             selection = memberView.children[0]
             expense = selection.values[0]
 
-            # TODO: MAKE THIS SHIT WORK!!!!!! SQL IS UP AND RUNNIGN!!!
+            database = LocalDatabase()
+
+            try:
+                database.setOne(f"INSERT INTO jokes (createdBy = ?, createdGuild = ?, createdChannel = ?, setup = ?, punchline = ?, expense = ?)", (createdBy, createdGuild, createdChannel, setup, punchline, expense))
+
+                reply = EmbedReply("Add Data - Success", "data", description="Successfully inserted joke into database.")
+
+                result = database.get(f"SELECT * FROM jokes WHERE setup={setup}")
+
+                jokeID, jokeCreatedBy, jokeCreatedAt, jokeCreatedGuild, jokeCreatedChannel, jokeSetup, jokePunchline, jokeExpense = result
+                jokeCreatedAt = dates.formatSimpleDate(timestamp=jokeCreatedAt)
+                
+                await reply.send(ctx)
+            except Exception as e:
+                reply = EmbedReply("Add Data - Error", "data", True, description=f"Your joke could not be added: {e}")
+
+                await reply.send(ctx)
+        else:
+            reply = EmbedReply("Add Data - Error", "data", True, description=f"You chose a table that doesn't exist in the list of tables accoring to the DB. Choice: {table}")
+
+            await reply.send(ctx)
 
 
 def setup(bot):
-    pass
-    # currentFile = sys.modules[__name__]
+    currentFile = sys.modules[__name__]
     
-    # for name in dir(currentFile):
-    #     obj = getattr(currentFile, name)
-    #     if isinstance(obj, type) and obj.__module__ == currentFile.__name__:
-    #         bot.add_cog(obj(bot))
+    for name in dir(currentFile):
+        obj = getattr(currentFile, name)
+
+        if isinstance(obj, type) and obj.__module__ == currentFile.__name__:
+            if obj.ISCOG:
+                bot.add_cog(obj(bot))

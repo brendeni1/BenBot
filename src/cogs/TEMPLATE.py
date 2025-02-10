@@ -6,6 +6,8 @@ from src.utils import dates
 from src.utils import db
 
 class MyCog(commands.Cog):
+    ISCOG = True
+    
     def __init__(self, bot):
         self.bot = bot
     
@@ -22,5 +24,7 @@ def setup(bot):
     
     # for name in dir(currentFile):
     #     obj = getattr(currentFile, name)
+
     #     if isinstance(obj, type) and obj.__module__ == currentFile.__name__:
-    #         bot.add_cog(obj(bot))
+    #         if obj.ISCOG:
+    #             bot.add_cog(obj(bot))

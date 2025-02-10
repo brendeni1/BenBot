@@ -14,6 +14,8 @@ from src.classes import *
 INQUIRY_REGEXS = [r"^what\?*$", r"^ok$", r"^yea?$", r"^and$"]
 
 class Jokes(commands.Cog):
+    ISCOG = True
+
     def __init__(self, bot):
         self.bot = bot
         self.description = "Funny jokes."
@@ -50,7 +52,7 @@ class Jokes(commands.Cog):
             return
         
         if expense and jokes:
-            filteredJokes: list[tuple] = database.get(f"SELECT * FROM jokes WHERE expense={expense.id}")
+            filteredJokes: list[tuple] = database.get("SELECT * FROM jokes WHERE expense = ?", (expense.id,))
             
             if not filteredJokes:
                 debugReply.description = "<:bensad:801246370106179624> That user doesn't have any jokes associated with them..."
@@ -106,5 +108,7 @@ def setup(bot):
     
     for name in dir(currentFile):
         obj = getattr(currentFile, name)
+
         if isinstance(obj, type) and obj.__module__ == currentFile.__name__:
-            bot.add_cog(obj(bot))
+            if obj.ISCOG:
+                bot.add_cog(obj(bot))

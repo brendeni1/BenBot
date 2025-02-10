@@ -9,14 +9,21 @@ class SelectGuildMember(discord.ui.Select):
 
         if noMemberOption:
             options = [discord.SelectOption(label="No Member", value="0")]
+
+            members = members[:24]
+        else:
+            members = members[:25]
         
-        for member in members[:24]:
+        for member in members:
             options.append(discord.SelectOption(label=member.display_name, value=str(member.id)))
 
         super().__init__(placeholder=placeholderTitle, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.respond(f"Associated with <@{self.values[0]}>", ephemeral=True)
+        if not self.values[0]:
+            await interaction.respond(f"Not associated with a member.", ephemeral=True)
+        else:
+            await interaction.respond(f"Associated with <@{self.values[0]}>", ephemeral=True)
         
         self.view.stop()
         self.disabled = True     
@@ -51,7 +58,24 @@ class LocalDatabase:
         
         self.database = database
 
-    def get(self, query: str, limit: int = 0) -> list:
+    def get(self, query: str, params: tuple = (), limit: int = 0) -> list:
+        try:
+            connection = sqlite3.connect(f"src/data/{self.database}")
+            cursor = connection.cursor()
+
+            cursor.execute(query, params)
+
+            if limit:
+                results = cursor.fetchmany(limit)
+            else:
+                results = cursor.fetchall()
+
+            return results
+        finally:
+            cursor.close()
+            connection.close()
+
+    def getRaw(self, query: str, limit: int = 0) -> list:
         try:
             connection = sqlite3.connect(f"src/data/{self.database}")
             cursor = connection.cursor()
@@ -88,7 +112,21 @@ class LocalDatabase:
             cursor.close()
             connection.close()
 
-    def setOne(self, query: str):
+    def setOne(self, query: str, params: tuple = ()):
+        try:
+            connection = sqlite3.connect(f"src/data/{self.database}")
+            cursor = connection.cursor()
+
+            cursor.execute(query, params)
+
+            connection.commit()
+
+            return True
+        finally:
+            cursor.close()
+            connection.close()
+
+    def setOneRaw(self, query: str):
         try:
             connection = sqlite3.connect(f"src/data/{self.database}")
             cursor = connection.cursor()

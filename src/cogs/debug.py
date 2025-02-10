@@ -8,8 +8,11 @@ from src.utils import dates
 from src.classes import *
 
 class Debug(commands.Cog):
+    ISCOG = True
+
     def __init__(self, bot):
         self.bot = bot
+        
         self.description = "Contains a few debug and bot vital commands."
         self.timeStarted = time.time()
     
@@ -51,5 +54,7 @@ def setup(bot):
     
     for name in dir(currentFile):
         obj = getattr(currentFile, name)
+
         if isinstance(obj, type) and obj.__module__ == currentFile.__name__:
-            bot.add_cog(obj(bot))
+            if obj.ISCOG:
+                bot.add_cog(obj(bot))
