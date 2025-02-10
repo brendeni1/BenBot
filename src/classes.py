@@ -20,7 +20,7 @@ class SelectGuildMember(discord.ui.Select):
         super().__init__(placeholder=placeholderTitle, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        if not self.values[0]:
+        if not int(self.values[0]):
             await interaction.respond(f"Not associated with a member.", ephemeral=True)
         else:
             await interaction.respond(f"Associated with <@{self.values[0]}>", ephemeral=True)

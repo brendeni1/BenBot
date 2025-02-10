@@ -29,6 +29,11 @@ class Jokes(commands.Cog):
             discord.Member,
             description="Pick a user to target the joke towards.",
             required=False
+        ), # type: ignore
+        id: discord.Option(
+            int,
+            description="Pick a joke by the joke's ID. If provided, overrides expense parameter.",
+            required=False
         ) # type: ignore
     ):
         joke = None
@@ -50,8 +55,17 @@ class Jokes(commands.Cog):
             
             await debugReply.send(ctx)
             return
-        
-        if expense and jokes:
+        if id and jokes:
+            filteredJokes: list[tuple] = database.get("SELECT * FROM jokes WHERE id = ?", (id,))
+            
+            if not filteredJokes:
+                debugReply.description = "<:bensad:801246370106179624> That ID doesn't exist..."
+                
+                await debugReply.send(ctx)
+                return
+            else:
+                joke = random.choice(filteredJokes)
+        elif expense and jokes:
             filteredJokes: list[tuple] = database.get("SELECT * FROM jokes WHERE expense = ?", (expense.id,))
             
             if not filteredJokes:
