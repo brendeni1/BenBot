@@ -1,11 +1,11 @@
 import os
 import discord
-from dotenv import load_dotenv
+import dotenv
 
 from src import Bot
 
 # Load the .env secret file.
-load_dotenv()
+dotenv.load_dotenv()
 
 # Constants.
 OWNER = int(os.getenv("OWNER"))

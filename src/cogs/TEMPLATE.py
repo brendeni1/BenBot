@@ -1,22 +1,20 @@
 import discord
-from discord.ext import commands
 import sys
+from discord.ext import commands
 
-from src.utils import dates
-from src.utils import db
+from src.classes import *
 
 class MyCog(commands.Cog):
     ISCOG = True
-    
+
     def __init__(self, bot):
         self.bot = bot
+        
+        self.description = "Template for cogs."
     
-    @discord.slash_command(description = "Example command.", guild_ids=[799341195109203998])
-    async def joke(
-        self,
-        ctx: discord.ApplicationContext
-    ):
-        pass 
+    @discord.slash_command(description = "Template for commands.", guild_ids=[799341195109203998])
+    async def command(self, ctx):
+        pass
 
 def setup(bot):
     pass

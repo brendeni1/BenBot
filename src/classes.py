@@ -44,9 +44,9 @@ class EmbedReply(discord.Embed):
 
     async def send(self, ctx: discord.ApplicationContext, quote: bool = True, **kwargs):
         if quote:
-            await ctx.respond(embed=self, **kwargs)
+            return await ctx.respond(embed=self, **kwargs)
         else:
-            await ctx.send(embed=self, **kwargs)
+            return await ctx.send(embed=self, **kwargs)
 
 class LocalDatabase:
     def __init__(self, database: str = "db"):

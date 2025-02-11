@@ -58,6 +58,8 @@ class Data(commands.Cog):
 
             humanMembers = guild.getAllHumanMembers(ctx)
 
+            humanMembers.sort(key = lambda member: member.nick if member.nick else member.name)
+
             memberView = SelectGuildMemberView(humanMembers, "Select a server member...", noMemberOption=True)
 
             memberSelectionReply = EmbedReply("Add Data - Add Member", "data", description="Please select the member that the joke is making fun of:")
