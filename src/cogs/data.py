@@ -26,14 +26,16 @@ class JokeModal(discord.ui.Modal):
 
         await interaction.response.send_message(embed=jokeReceivedEmbed, ephemeral=True)
 
-class Data(commands.Cog):
+class DataCommands(commands.Cog):
     ISCOG = True
     tables = LocalDatabase().listTables()
 
     def __init__(self, bot):
         self.bot = bot
+
+    data = discord.SlashCommandGroup("data", "A collection of commands for manipulating data within the bot's DB.", guild_ids=[799341195109203998])
     
-    @discord.slash_command(description = "Add data to a table in the bot's db. Select table > click Enter > further instructions presented.", guild_ids=[799341195109203998])
+    @data.command(description = "Add data to a table in the bot's db. Select table > click Enter > further instructions presented.", guild_ids=[799341195109203998])
     async def add(
         self,
         ctx: discord.ApplicationContext,
@@ -126,7 +128,7 @@ class Data(commands.Cog):
 
             await reply.send(ctx)
 
-    @discord.slash_command(description = "View data in a table in the bot's db. Select table > click Enter", guild_ids=[799341195109203998])
+    @data.command(description = "View data in a table in the bot's db. Select table > click Enter", guild_ids=[799341195109203998])
     async def view(
         self,
         ctx: discord.ApplicationContext,
@@ -178,7 +180,7 @@ class Data(commands.Cog):
 
             await reply.send(ctx)
 
-    @discord.slash_command(description = "Delete data in a table in the bot's db. Select table > Select ID > Click Enter", guild_ids=[799341195109203998])
+    @data.command(description = "Delete data in a table in the bot's db. Select table > Select ID > Click Enter", guild_ids=[799341195109203998])
     async def delete(
         self,
         ctx: discord.ApplicationContext,

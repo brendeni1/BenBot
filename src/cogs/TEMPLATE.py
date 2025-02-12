@@ -8,7 +8,7 @@ class MyCog(commands.Cog):
     ISCOG = True
 
     def __init__(self, bot):
-        self.bot = bot
+        self.bot: discord.Bot = bot
         
         self.description = "Template for cogs."
     
