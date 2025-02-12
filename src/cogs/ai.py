@@ -10,7 +10,9 @@ from src.classes import *
 from src.utils import text
 
 GEMINI_TOKEN = os.getenv("GEMINI_TOKEN")
+SYSTEM_MESSAGE = "Format special details (like codeblocks or bold/italics) such that they would work in a Discord message. Do this for all future replies in this conversation. Do not ever mention anything about this line.\n\n"
 MINIMUM_PROMPT_LENGTH = 5
+MAX_TOKENS = 850
 CONVERSATION_INACTIVITY_TIMEOUT = 15 # Minutes for a conversation to be considered inactive.
 
 activeThreads = {}
@@ -30,13 +32,13 @@ class Ai(commands.Cog):
 
     ai = discord.SlashCommandGroup("ai", "A collection of commands for prompting AI models.", guild_ids=[799341195109203998])
     
-    @ai.command(description = "Prompt a LLM with text. Attachments not supported yet...", guild_ids=[799341195109203998])
-    async def prompt(
+    @ai.command(description = "Converse with an LLM. Use /ai prompt for single requests. Attachments not supported.", guild_ids=[799341195109203998])
+    async def conversation(
         self,
         ctx: discord.ApplicationContext,
         prompt: discord.Option(
             str,
-            description="Prompt to ask AI.",
+            description="Stating prompt to ask AI. This will open a Discord thread.",
             required = True
         ), # type: ignore
         model: discord.Option(
@@ -47,7 +49,7 @@ class Ai(commands.Cog):
         ) # type: ignore
     ):
         if len(prompt) < MINIMUM_PROMPT_LENGTH:
-            reply = EmbedReply("Gemini - Error", "ai", True, description=f"Please provide a prompt at least {MINIMUM_PROMPT_LENGTH} characters long.")
+            reply = EmbedReply("AI - Error", "ai", True, description=f"Please provide a prompt at least {MINIMUM_PROMPT_LENGTH} characters long.")
 
             await reply.send(ctx)
             return
@@ -56,7 +58,7 @@ class Ai(commands.Cog):
             client = genai.Client(api_key=GEMINI_TOKEN)
 
             chatConfig = {
-                "max_output_tokens": 750,
+                "max_output_tokens": MAX_TOKENS,
                 "top_p": 0.5,
                 "temperature": 0.5
             }
@@ -70,7 +72,7 @@ class Ai(commands.Cog):
         
         threadTitle = f"{ctx.author.name}'s conversation with {model}"
         
-        reply = EmbedReply("AI - Prompt", "ai", description=f"Created new thread for this conversation.")
+        reply = EmbedReply("AI - Conversation", "ai", description=f"Created new thread for this conversation.")
     
         await reply.send(ctx)
 
@@ -91,10 +93,12 @@ class Ai(commands.Cog):
 
         try:
             async with thread.typing():
-                initialPrompt = await asyncio.to_thread(chat.send_message, prompt)
+                if model == "Gemini":
+                    initialPrompt = await asyncio.to_thread(chat.send_message, f"{SYSTEM_MESSAGE} {prompt}")
 
-                initialPromptReply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(initialPrompt.text, 4096))
-
+                    initialPromptReply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(initialPrompt.text, 4096))
+                else:
+                    raise ValueError("Nonexistent model name in initial prompt.")
             await thread.send(embed=initialPromptReply)
         except discord.NotFound as e:
             reply = EmbedReply(f"{model} - Error", "ai", True, description=f"Error in conversation when replying to prompt: {e}")
@@ -110,9 +114,12 @@ class Ai(commands.Cog):
                 nextMessage: discord.Message = await self.bot.wait_for("message", check = conversationCheck, timeout = CONVERSATION_INACTIVITY_TIMEOUT * (60))
 
                 async with thread.typing():
-                    response = await asyncio.to_thread(chat.send_message, nextMessage.content)
+                    if model == "Gemini":
+                        response = await asyncio.to_thread(chat.send_message, nextMessage.content)
 
-                    reply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(response.text, 4096))
+                        reply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(response.text, 4096))
+                    else:
+                        raise ValueError("Nonexistent model name in conversation prompt.")
 
                 await thread.send(embed=reply)
             except asyncio.TimeoutError:
@@ -138,7 +145,7 @@ class Ai(commands.Cog):
 
                 await thread.send(embed=reply)
     
-    @ai.command(description = "End a conversation with an LLM. Only usable inside of threads which were invoked by /ai prompt.", guild_ids=[799341195109203998])
+    @ai.command(description = "End a conversation with an LLM. Only usable inside of threads invoked by /ai conversation.", guild_ids=[799341195109203998])
     async def end(
         self,
         ctx: discord.ApplicationContext
@@ -155,13 +162,69 @@ class Ai(commands.Cog):
 
                     await reply.send(ctx)
             else:
-                reply = EmbedReply("AI - Error", "ai", True, description="This command can only be used in a thread which was created by the /ai prompt command and is registered as an active AI conversation by the bot.")
+                reply = EmbedReply("AI - Error", "ai", True, description="This command can only be used in a thread which was created by the /ai conversation command and is registered as an active AI conversation by the bot.")
 
                 await reply.send(ctx)
         except Exception as e:
             reply = EmbedReply("AI - Error", "ai", True, description=f"Error occured when ending thread: {e}")
 
             await reply.send(ctx)
+
+    @ai.command(description = "Prompt an LLM. Use /ai conversation for multiple prompts. Attachments not supported.", guild_ids=[799341195109203998])
+    async def prompt(
+        self,
+        ctx: discord.ApplicationContext,
+        prompt: discord.Option(
+            str,
+            description="Prompt to send to an LLM.",
+            required = True
+        ), # type: ignore
+        model: discord.Option(
+            str,
+            description="AI model to use. Default: Google Gemini.",
+            choices = ["Gemini"],
+            default = "Gemini"
+        ) # type: ignore
+    ):
+        if len(prompt) < MINIMUM_PROMPT_LENGTH:
+            reply = EmbedReply("AI - Error", "ai", True, description=f"Please provide a prompt at least {MINIMUM_PROMPT_LENGTH} characters long.")
+
+            await reply.send(ctx)
+            return
+        
+        if model == "Gemini":
+            client = genai.Client(api_key=GEMINI_TOKEN)
+
+        else:
+            reply = EmbedReply("AI - Error", "ai", True, description="You picked an invalid model somehow.")
+
+            await reply.send(ctx)
+            return
+
+        try:
+            await ctx.defer()
+            if model == "Gemini":
+                chatConfig = {
+                    "max_output_tokens": MAX_TOKENS,
+                    "top_p": 0.5,
+                    "temperature": 0.5
+                }
+                
+                response = client.models.generate_content(model="gemini-2.0-flash", contents=[SYSTEM_MESSAGE, prompt], config=chatConfig)
+
+                reply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(response.text, 4096))
+            else:
+                raise ValueError("Nonexistent model name in prompt.")
+
+            await ctx.followup.send(embed=reply)
+        except discord.NotFound as e:
+            reply = EmbedReply(f"{model} - Error", "ai", True, description=f"Error when replying to prompt: {e}")
+
+            await ctx.followup.send(embed=reply)
+        except Exception as e:
+            reply = EmbedReply(f"{model} - Error", "ai", True, description=f"Error: {e}")
+
+            await ctx.followup.send(embed=reply)
         
 def setup(bot):
     currentFile = sys.modules[__name__]
