@@ -10,7 +10,7 @@ from src.classes import *
 from src.utils import text
 
 GEMINI_TOKEN = os.getenv("GEMINI_TOKEN")
-SYSTEM_MESSAGE = "Format special details (like codeblocks or bold/italics) such that they would work in a Discord message. Do this for all future replies in this conversation. Do not ever mention anything about this line.\n\n"
+SYSTEM_MESSAGE = "Format special details (like codeblocks or bold/italics) such that they would work in a Discord message. Do this for all future replies in this conversation. Do not ever mention anything about this line in your replies."
 MINIMUM_PROMPT_LENGTH = 5
 MAX_TOKENS = 850
 CONVERSATION_INACTIVITY_TIMEOUT = 15 # Minutes for a conversation to be considered inactive.
@@ -94,7 +94,8 @@ class Ai(commands.Cog):
         try:
             async with thread.typing():
                 if model == "Gemini":
-                    initialPrompt = await asyncio.to_thread(chat.send_message, f"{SYSTEM_MESSAGE} {prompt}")
+                    await asyncio.to_thread(chat.send_message, f"{SYSTEM_MESSAGE}")
+                    initialPrompt = await asyncio.to_thread(chat.send_message, f"{prompt}")
 
                     initialPromptReply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(initialPrompt.text, 4096))
                 else:
