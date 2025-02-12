@@ -7,10 +7,11 @@ import asyncio
 from google import genai
 
 from src.classes import *
+from src.utils import text
 
 GEMINI_TOKEN = os.getenv("GEMINI_TOKEN")
 MINIMUM_PROMPT_LENGTH = 5
-CONVERSATION_INACTIVITY_TIMEOUT = 0.25 # Minutes for a conversation to be considered inactive.
+CONVERSATION_INACTIVITY_TIMEOUT = 15 # Minutes for a conversation to be considered inactive.
 
 activeThreads = {}
 
@@ -50,18 +51,23 @@ class Ai(commands.Cog):
 
             await reply.send(ctx)
             return
+        
+        if model == "Gemini":
+            client = genai.Client(api_key=GEMINI_TOKEN)
 
-        # try:
-        #     chat = self.geminiClient.chats.create(model="gemini-2.0-flash")
+            chatConfig = {
+                "max_output_tokens": 750,
+                "top_p": 0.5,
+                "temperature": 0.5
+            }
 
-        #     response = chat.send_message(f"Give me a few word title for this prompt. No quotes just the title: {prompt}")
-        # except Exception as e:
-        #     reply = EmbedReply("Gemini - Error", "ai", True, description=f"Error: {e}")
+            chat = client.chats.create(model="gemini-2.0-flash", config=chatConfig)
+        else:
+            reply = EmbedReply("AI - Error", "ai", True, description="You picked an invalid model somehow.")
 
-        #     await reply.send(ctx)
-
-        #     return
-
+            await reply.send(ctx)
+            return
+        
         threadTitle = f"{ctx.author.name}'s conversation with {model}"
         
         reply = EmbedReply("AI - Prompt", "ai", description=f"Created new thread for this conversation.")
@@ -81,13 +87,32 @@ class Ai(commands.Cog):
 
         activeThreads[thread.id] = True
 
-        closeConversationReply = EmbedReply("AI - Conversation Closed", "ai", description=f"Conversation with AI started by {ctx.author.mention} has timed out and the thread was deleted.")
+        closeConversationReply = EmbedReply("AI - Conversation Closed", "ai", description=f"Conversation with {model} started by {ctx.author.mention} has timed out and the thread was deleted.")
+
+        try:
+            async with thread.typing():
+                initialPrompt = await asyncio.to_thread(chat.send_message, prompt)
+
+                initialPromptReply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(initialPrompt.text, 4096))
+
+            await thread.send(embed=initialPromptReply)
+        except discord.NotFound as e:
+            reply = EmbedReply(f"{model} - Error", "ai", True, description=f"Error in conversation when replying to prompt: {e}")
+
+            await reply.send(ctx)
+        except Exception as e:
+            reply = EmbedReply(f"{model} - Error", "ai", True, description=f"Error: {e}")
+
+            await thread.send(embed=reply)
 
         while activeThreads.get(thread.id, False):
             try:
-                nextMessage = await self.bot.wait_for("message", check = conversationCheck, timeout = CONVERSATION_INACTIVITY_TIMEOUT * (60))
+                nextMessage: discord.Message = await self.bot.wait_for("message", check = conversationCheck, timeout = CONVERSATION_INACTIVITY_TIMEOUT * (60))
 
-                reply = EmbedReply("AI - Response", "ai", description=f"You said: {nextMessage.content}")
+                async with thread.typing():
+                    response = await asyncio.to_thread(chat.send_message, nextMessage.content)
+
+                    reply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(response.text, 4096))
 
                 await thread.send(embed=reply)
             except asyncio.TimeoutError:
@@ -111,7 +136,7 @@ class Ai(commands.Cog):
             except Exception as e:
                 reply = EmbedReply("AI - Error", "ai", True, description=f"Error in thread: {e}")
 
-                await reply.send(ctx)
+                await thread.send(embed=reply)
     
     @ai.command(description = "End a conversation with an LLM. Only usable inside of threads which were invoked by /ai prompt.", guild_ids=[799341195109203998])
     async def end(
