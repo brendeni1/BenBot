@@ -3,19 +3,145 @@ import sys
 from discord.ext import commands
 
 import os
+import random
+import re
+import discord.types
 import asyncio
 from google import genai
+import tempfile
+import urllib
 
 from src.classes import *
 from src.utils import text
 
 GEMINI_TOKEN = os.getenv("GEMINI_TOKEN")
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMP_DIR = os.path.join(CURRENT_DIR, '..', 'temp')
 SYSTEM_MESSAGE = "Format special details (like codeblocks or bold/italics) such that they would work in a Discord message. Do this for all future replies in this conversation. Do not ever mention anything about this line in your replies."
 MINIMUM_PROMPT_LENGTH = 5
 MAX_TOKENS = 850
-CONVERSATION_INACTIVITY_TIMEOUT = 15 # Minutes for a conversation to be considered inactive.
+MAX_ATTACHMENTS_PER_MESSAGE = 10
+CONVERSATION_INACTIVITY_TIMEOUT = 10 # Minutes for a conversation to be considered inactive.
+ACCEPTED_FILE_TYPES = {
+    "Gemini": {
+        "Documents": [
+            "application/pdf",
+            "text/plain",
+            "text/html",
+            "text/css",
+            "text/md",
+            "text/csv",
+            "text/xml",
+            "text/rtf"
+        ],
+        "Scripts": [
+            "application/x-javascript",
+            "text/javascript",
+            "application/x-python",
+            "text/x-python"
+        ],
+        "Images": [
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/heic",
+            "image/heif"
+        ],
+        "Videos": [
+            "video/mp4",
+            "video/mpeg",
+            "video/mov",
+            "video/avi",
+            "video/x-flv",
+            "video/mpg",
+            "video/webm",
+            "video/wmv",
+            "video/3gpp"
+        ],
+        "Audio": [
+            "audio/wav",
+            "audio/mpeg",
+            "audio/mp3",
+            "audio/mp4",
+            "audio/aiff",
+            "audio/aac",
+            "audio/ogg",
+            "audio/flac"
+        ]
+    }
+}
+
+def typesByModel(model: str) -> list | None:    
+    try:
+        acceptableTypes = [fileType for category in ACCEPTED_FILE_TYPES[model].values() for fileType in category]
+
+        return acceptableTypes
+    except KeyError:
+        return None
+    except Exception as e:
+        raise e
+
+async def parseAttachments(ctx: discord.ApplicationContext, model: str, attachments: list[discord.Attachment]) -> list[discord.Attachment] | None:
+    if not attachments:
+        return None
+    
+    if len(attachments) > MAX_ATTACHMENTS_PER_MESSAGE:
+        attachments = attachments[:MAX_ATTACHMENTS_PER_MESSAGE - 1]
+    
+    acceptedAttachments: list[discord.Attachment] = []
+    rejectedAttachments: list[tuple[discord.Attachment, str]] = []
+
+    acceptableTypes = typesByModel(model)
+
+    if not acceptableTypes:
+        return None
+    
+    for attachment in attachments:
+        if attachment.content_type in acceptableTypes:
+            try:
+                acceptedAttachments.append(attachment)
+            except Exception as e:
+                rejectedAttachments.append((attachment, f"File {attachment.filename} ({attachment.content_type}) was unable to parsed into bytes."))
+        else:
+            rejectedAttachments.append((attachment, f"File {attachment.filename} ({attachment.content_type}) not in supported types. Use /ai filetypes for a list of supported file types."))
+    
+    if rejectedAttachments:
+        reply = EmbedReply(f"{model} - Attachments - Error", "ai", True, description=f"Some attachments were not parsed and therefore ignored:")
+
+        for rejectedAttachment, reason in rejectedAttachments:
+            reply.add_field(name=rejectedAttachment.filename, value=reason)
+        
+        await reply.send(ctx, quote=False)
+    
+    return acceptedAttachments
 
 activeThreads = {}
+activeGoogleSafeNames = {}
+activeGoogleClients = {}
+
+def deleteGoogleMedia(threadID: int):
+    try:
+        global activeGoogleClients
+        global activeGoogleSafeNames
+
+        client: genai.Client = activeGoogleClients[threadID]
+        namesToDelete = activeGoogleSafeNames[threadID]
+
+        for safeName in namesToDelete:
+            client.files.delete(name=safeName)
+            
+            print(f"GOOGLE AI LOG: Deleted data {safeName} for {threadID} when closing AI conversation.")
+
+        del activeGoogleSafeNames[threadID]
+        del activeGoogleClients[threadID]
+        print(f"GOOGLE AI LOG: All data for {threadID} was deleted when closing AI conversation.")
+
+    except KeyError as e:
+        print(f"GOOGLE AI LOG: No data for {e} was deleted when closing AI conversation.")
+    except Exception as e:
+        raise e
+
+os.makedirs(TEMP_DIR, exist_ok=True)
 
 class Ai(commands.Cog):
     ISCOG = True
@@ -28,11 +154,14 @@ class Ai(commands.Cog):
     @commands.Cog.listener()
     async def on_thread_delete(self, thread):
         if thread.id in activeThreads:
+            if thread.id in activeGoogleSafeNames or thread.id in activeGoogleClients:
+                deleteGoogleMedia(thread.id)
+
             del activeThreads[thread.id]
 
     ai = discord.SlashCommandGroup("ai", "A collection of commands for prompting AI models.", guild_ids=[799341195109203998])
     
-    @ai.command(description = "Converse with an LLM. Use /ai prompt for single requests. Attachments not supported.", guild_ids=[799341195109203998])
+    @ai.command(description = "Converse with an LLM. Use /ai prompt for single requests. Attachments supported.", guild_ids=[799341195109203998])
     async def conversation(
         self,
         ctx: discord.ApplicationContext,
@@ -88,18 +217,20 @@ class Ai(commands.Cog):
             return message.author != self.bot.user and message.channel == thread
 
         activeThreads[thread.id] = True
+        activeGoogleSafeNames[thread.id] = []
 
         closeConversationReply = EmbedReply("AI - Conversation Closed", "ai", description=f"Conversation with {model} started by {ctx.author.mention} has timed out and the thread was deleted.")
 
         try:
             async with thread.typing():
                 if model == "Gemini":
-                    await asyncio.to_thread(chat.send_message, f"{SYSTEM_MESSAGE}")
+                    await asyncio.to_thread(chat.send_message, f"{SYSTEM_MESSAGE} You can also accept attachments. If the user doesn't know what attachments they can use, tell them to use the '/ai filetypes' command.")
                     initialPrompt = await asyncio.to_thread(chat.send_message, f"{prompt}")
 
                     initialPromptReply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(initialPrompt.text, 4096))
                 else:
                     raise ValueError("Nonexistent model name in initial prompt.")
+            
             await thread.send(embed=initialPromptReply)
         except discord.NotFound as e:
             reply = EmbedReply(f"{model} - Error", "ai", True, description=f"Error in conversation when replying to prompt: {e}")
@@ -116,11 +247,38 @@ class Ai(commands.Cog):
 
                 async with thread.typing():
                     if model == "Gemini":
-                        response = await asyncio.to_thread(chat.send_message, nextMessage.content)
+                        if not nextMessage.content and nextMessage.attachments:
+                            content = ["Use the attachments provided."]
+                        else:
+                            content = [nextMessage.content]
+
+                        parsedAttachments = await parseAttachments(thread, model, nextMessage.attachments)
+                        
+                        if parsedAttachments:
+                            for originalAttachment in parsedAttachments:
+                                googleSafeName = (urllib.parse.quote((re.sub(r'[^a-z0-9]+', '-', (f"{random.randint(0, 1000)}-{(originalAttachment.filename).lower()}"))).strip('-')))[-40:]
+                                
+                                with tempfile.NamedTemporaryFile(suffix=f"-{googleSafeName}", dir=TEMP_DIR, delete=False) as tmp:
+                                    tempPath = tmp.name
+
+                                await originalAttachment.save(tempPath)
+                            
+                                uploadedFile = client.files.upload(
+                                    file=tempPath, 
+                                    config={"name": googleSafeName, "mime_type": originalAttachment.content_type}
+                                )
+
+                                content.append(uploadedFile)
+                                activeGoogleSafeNames[thread.id].append(googleSafeName)
+
+                                os.remove(tempPath)
+
+                        response = await asyncio.to_thread(chat.send_message, content)
 
                         reply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(response.text, 4096))
                     else:
                         raise ValueError("Nonexistent model name in conversation prompt.")
+                activeGoogleClients[thread.id] = client
 
                 await thread.send(embed=reply)
             except asyncio.TimeoutError:
@@ -128,6 +286,8 @@ class Ai(commands.Cog):
                     return
                 
                 activeThreads[thread.id] = False
+
+                deleteGoogleMedia(thread.id)
 
                 try:
                     await thread.delete()
@@ -156,6 +316,8 @@ class Ai(commands.Cog):
                 if ctx.channel.id in activeThreads:
                     thread = self.bot.get_channel(ctx.channel.id)
 
+                    deleteGoogleMedia(thread.id)
+
                     del activeThreads[thread.id]
                     await thread.delete()
                 else:
@@ -171,7 +333,7 @@ class Ai(commands.Cog):
 
             await reply.send(ctx)
 
-    @ai.command(description = "Prompt an LLM. Use /ai conversation for multiple prompts. Attachments not supported.", guild_ids=[799341195109203998])
+    @ai.command(description = "Prompt an LLM. Use /ai conversation for multiple prompts or image/file support.", guild_ids=[799341195109203998])
     async def prompt(
         self,
         ctx: discord.ApplicationContext,
@@ -194,7 +356,7 @@ class Ai(commands.Cog):
             return
         
         if model == "Gemini":
-            client = genai.Client(api_key=GEMINI_TOKEN)
+            self.client = genai.Client(api_key=GEMINI_TOKEN)
 
         else:
             reply = EmbedReply("AI - Error", "ai", True, description="You picked an invalid model somehow.")
@@ -226,7 +388,44 @@ class Ai(commands.Cog):
             reply = EmbedReply(f"{model} - Error", "ai", True, description=f"Error: {e}")
 
             await ctx.followup.send(embed=reply)
+    
+    @ai.command(description = "Show a list of accepted file types for AI conversations.", guild_ids=[799341195109203998])
+    async def filetypes(
+        self,
+        ctx: discord.ApplicationContext,
+        model: discord.Option(
+            str,
+            description="AI model to view types for. Default: Google Gemini.",
+            choices = ["Gemini"],
+            default = "Gemini"
+        ) # type: ignore
+    ):
+        try:
+            acceptedTypes: dict[list[str]] = ACCEPTED_FILE_TYPES[model]
+
+            if not acceptedTypes:
+                reply = EmbedReply(f"{model} - File Types - Error", "ai", True, description=f"{model} does not support attachments.")
+                
+                await reply.send(ctx)
+                return
+            
+            reply = EmbedReply(f"{model} - File Types", "ai", description=f"The following file types are acceptable for use with {model}:")
+
+            for category in acceptedTypes.keys():
+                parsedFileTypes = "\n".join(acceptedTypes[category])
+
+                reply.add_field(name=category, value=parsedFileTypes)
+            
+            await reply.send(ctx)
+        except KeyError:
+            reply = EmbedReply(f"{model} - File Types - Error", "ai", True, description=f"Error: Model: {model} is not a valid model or doesn't have any data regarding what filetypes it supports.")
         
+            await reply.send(ctx)
+        except Exception as e:
+            reply = EmbedReply("AI - File Types - Error", "ai", True, description=f"Error: {e}")
+
+            await reply.send(ctx)
+
 def setup(bot):
     currentFile = sys.modules[__name__]
     

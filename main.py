@@ -4,6 +4,8 @@ import dotenv
 
 from src import Bot
 
+from src.utils.files import clear_temp_folder
+
 # Load the .env secret file.
 dotenv.load_dotenv()
 
@@ -14,6 +16,7 @@ BOT_TOKEN = os.getenv("DISCORD_TOKEN")
 
 # Clear terminal.
 os.system("cls")
+clear_temp_folder()
 
 # Enable all intents for the bot.
 intents = discord.Intents.all()
