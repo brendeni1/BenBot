@@ -27,6 +27,7 @@ ACCEPTED_FILE_TYPES = {
         "Documents": [
             "application/pdf",
             "text/plain",
+            "text/plain; charset=utf-8",
             "text/html",
             "text/css",
             "text/md",
@@ -98,10 +99,7 @@ async def parseAttachments(ctx: discord.ApplicationContext, model: str, attachme
     
     for attachment in attachments:
         if attachment.content_type in acceptableTypes:
-            try:
-                acceptedAttachments.append(attachment)
-            except Exception as e:
-                rejectedAttachments.append((attachment, f"File {attachment.filename} ({attachment.content_type}) was unable to parsed into bytes."))
+            acceptedAttachments.append(attachment)
         else:
             rejectedAttachments.append((attachment, f"File {attachment.filename} ({attachment.content_type}) not in supported types. Use /ai filetypes for a list of supported file types."))
     
@@ -117,25 +115,26 @@ async def parseAttachments(ctx: discord.ApplicationContext, model: str, attachme
 
 activeThreads = {}
 activeGoogleSafeNames = {}
-activeGoogleClients = {}
+googleClient = genai.Client(api_key=GEMINI_TOKEN)
 
 def deleteGoogleMedia(threadID: int):
     try:
-        global activeGoogleClients
+        global googleClient
         global activeGoogleSafeNames
 
-        client: genai.Client = activeGoogleClients[threadID]
         namesToDelete = activeGoogleSafeNames[threadID]
 
+        if not namesToDelete:
+            raise KeyError(threadID)
+
         for safeName in namesToDelete:
-            client.files.delete(name=safeName)
+            googleClient.files.delete(name=safeName)
             
             print(f"GOOGLE AI LOG: Deleted data {safeName} for {threadID} when closing AI conversation.")
 
         del activeGoogleSafeNames[threadID]
-        del activeGoogleClients[threadID]
+        
         print(f"GOOGLE AI LOG: All data for {threadID} was deleted when closing AI conversation.")
-
     except KeyError as e:
         print(f"GOOGLE AI LOG: No data for {e} was deleted when closing AI conversation.")
     except Exception as e:
@@ -145,6 +144,7 @@ os.makedirs(TEMP_DIR, exist_ok=True)
 
 class Ai(commands.Cog):
     ISCOG = True
+    global googleClient
 
     def __init__(self, bot):
         self.bot: discord.Bot = bot
@@ -154,7 +154,7 @@ class Ai(commands.Cog):
     @commands.Cog.listener()
     async def on_thread_delete(self, thread):
         if thread.id in activeThreads:
-            if thread.id in activeGoogleSafeNames or thread.id in activeGoogleClients:
+            if thread.id in activeGoogleSafeNames:
                 deleteGoogleMedia(thread.id)
 
             del activeThreads[thread.id]
@@ -184,15 +184,13 @@ class Ai(commands.Cog):
             return
         
         if model == "Gemini":
-            client = genai.Client(api_key=GEMINI_TOKEN)
-
             chatConfig = {
                 "max_output_tokens": MAX_TOKENS,
                 "top_p": 0.5,
                 "temperature": 0.5
             }
 
-            chat = client.chats.create(model="gemini-2.0-flash", config=chatConfig)
+            chat = googleClient.chats.create(model="gemini-2.0-flash", config=chatConfig)
         else:
             reply = EmbedReply("AI - Error", "ai", True, description="You picked an invalid model somehow.")
 
@@ -209,7 +207,10 @@ class Ai(commands.Cog):
         
         thread = await origMessage.create_thread(name=threadTitle, auto_archive_duration=60)
 
-        threadInstructions = EmbedReply(f"{model} - Conversation", "ai", description=f"You have started a new conversation with {model}.\n\nReply within this thread to continue the conversation.\n\nTo end this conversation, delete this thread or use /ai end. This thread will also close after {CONVERSATION_INACTIVITY_TIMEOUT} mins of inactivity.")
+        if model in ACCEPTED_FILE_TYPES and ACCEPTED_FILE_TYPES[model]:
+            threadInstructions = EmbedReply(f"{model} - Conversation", "ai", description=f"You have started a new conversation with {model}. Attachments supported with this model, simply send whatever in this thread.\n\nReply within this thread to continue the conversation.\n\nTo end this conversation, delete this thread or use /ai end. This thread will also close after {CONVERSATION_INACTIVITY_TIMEOUT} mins of inactivity.")
+        else:
+            threadInstructions = EmbedReply(f"{model} - Conversation", "ai", description=f"You have started a new conversation with {model}. Attachments not supported with this model.\n\nReply within this thread to continue the conversation.\n\nTo end this conversation, delete this thread or use /ai end. This thread will also close after {CONVERSATION_INACTIVITY_TIMEOUT} mins of inactivity.")
 
         await thread.send(embed=threadInstructions)
 
@@ -247,13 +248,20 @@ class Ai(commands.Cog):
 
                 async with thread.typing():
                     if model == "Gemini":
-                        if not nextMessage.content and nextMessage.attachments:
-                            content = ["Use the attachments provided."]
-                        else:
-                            content = [nextMessage.content]
-
                         parsedAttachments = await parseAttachments(thread, model, nextMessage.attachments)
                         
+                        if not nextMessage.content and parsedAttachments:
+                            content = ["Use the attachments provided."]
+                        elif nextMessage.attachments and not parsedAttachments:
+                            content = ["Prompt the user that you could not use the file and tell them to only submit valid filetypes using the /ai filetypes command."]
+                        elif nextMessage.content:
+                            content = [nextMessage.content]
+                        else:
+                            reply = EmbedReply(f"{model} - Error", "ai", True, description=f"Error replying to weird message: no content, no attachments, no parsed attachments.\n\nPlease make sure that you are either giving an attachment to {model}, prompting with text, or both.")
+
+                            await thread.send(embed=reply)
+                            continue
+
                         if parsedAttachments:
                             for originalAttachment in parsedAttachments:
                                 googleSafeName = (urllib.parse.quote((re.sub(r'[^a-z0-9]+', '-', (f"{random.randint(0, 1000)}-{(originalAttachment.filename).lower()}"))).strip('-')))[-40:]
@@ -263,7 +271,7 @@ class Ai(commands.Cog):
 
                                 await originalAttachment.save(tempPath)
                             
-                                uploadedFile = client.files.upload(
+                                uploadedFile = googleClient.files.upload(
                                     file=tempPath, 
                                     config={"name": googleSafeName, "mime_type": originalAttachment.content_type}
                                 )
@@ -278,7 +286,6 @@ class Ai(commands.Cog):
                         reply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(response.text, 4096))
                     else:
                         raise ValueError("Nonexistent model name in conversation prompt.")
-                activeGoogleClients[thread.id] = client
 
                 await thread.send(embed=reply)
             except asyncio.TimeoutError:
@@ -354,15 +361,6 @@ class Ai(commands.Cog):
 
             await reply.send(ctx)
             return
-        
-        if model == "Gemini":
-            self.client = genai.Client(api_key=GEMINI_TOKEN)
-
-        else:
-            reply = EmbedReply("AI - Error", "ai", True, description="You picked an invalid model somehow.")
-
-            await reply.send(ctx)
-            return
 
         try:
             await ctx.defer()
@@ -373,7 +371,7 @@ class Ai(commands.Cog):
                     "temperature": 0.5
                 }
                 
-                response = client.models.generate_content(model="gemini-2.0-flash", contents=[SYSTEM_MESSAGE, prompt], config=chatConfig)
+                response = googleClient.models.generate_content(model="gemini-2.0-flash", contents=[SYSTEM_MESSAGE, prompt], config=chatConfig)
 
                 reply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(response.text, 4096))
             else:
@@ -408,7 +406,7 @@ class Ai(commands.Cog):
                 
                 await reply.send(ctx)
                 return
-            
+
             reply = EmbedReply(f"{model} - File Types", "ai", description=f"The following file types are acceptable for use with {model}:")
 
             for category in acceptedTypes.keys():
@@ -418,8 +416,8 @@ class Ai(commands.Cog):
             
             await reply.send(ctx)
         except KeyError:
-            reply = EmbedReply(f"{model} - File Types - Error", "ai", True, description=f"Error: Model: {model} is not a valid model or doesn't have any data regarding what filetypes it supports.")
-        
+            reply = EmbedReply(f"{model} - File Types - Error", "ai", True, description=f"{model} does not support attachments.")
+            
             await reply.send(ctx)
         except Exception as e:
             reply = EmbedReply("AI - File Types - Error", "ai", True, description=f"Error: {e}")
