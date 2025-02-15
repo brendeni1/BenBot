@@ -13,6 +13,7 @@ import urllib
 
 from src.classes import *
 from src.utils import text
+from src.utils import dates
 
 GEMINI_TOKEN = os.getenv("GEMINI_TOKEN")
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -21,7 +22,9 @@ SYSTEM_MESSAGE = "Format special details (like codeblocks or bold/italics) such 
 MINIMUM_PROMPT_LENGTH = 5
 MAX_TOKENS = 850
 MAX_ATTACHMENTS_PER_MESSAGE = 10
-CONVERSATION_INACTIVITY_TIMEOUT = 10 # Minutes for a conversation to be considered inactive.
+CONVERSATION_INACTIVITY_TIMEOUT = 30 # Minutes for a conversation to be considered inactive.
+INACTIVITY_WARNING = (CONVERSATION_INACTIVITY_TIMEOUT / 4) * 60 if CONVERSATION_INACTIVITY_TIMEOUT >= 1 else 0 # Seconds for a conversation warning to be sent in an inactive thread.
+TIMEOUT_RESET_SUCCESS = f"The timeout for this thread has been reset to {dates.formatSeconds(int(CONVERSATION_INACTIVITY_TIMEOUT * 60))}."
 ACCEPTED_FILE_TYPES = {
     "Gemini": {
         "Documents": [
@@ -113,6 +116,25 @@ async def parseAttachments(ctx: discord.ApplicationContext, model: str, attachme
     
     return acceptedAttachments
 
+async def sendEndingWarning(thread: discord.Thread, warnAfter: int, bot: discord.Bot):
+    try:
+        await asyncio.sleep((CONVERSATION_INACTIVITY_TIMEOUT * 60) - warnAfter)
+
+        formattedLeft = dates.formatSeconds(int(warnAfter))
+
+        peopleWhoSpoke = await thread.fetch_members()
+
+        if peopleWhoSpoke:
+            peopleWhoSpoke = filter(lambda member: member.id != bot.user.id, peopleWhoSpoke)
+        
+        warning = EmbedReply("AI Conversation - Timeout Warning", "ai", description=f"⚠️ You have {formattedLeft} left before the conversation times out!\n\nUse /ai timeoutreset or interact with the AI to keep the conversation for another {dates.formatSeconds(int(CONVERSATION_INACTIVITY_TIMEOUT * 60))}.")
+        
+        formattedSpeakers = " ".join(f"<@{speaker.id}>" for speaker in peopleWhoSpoke)
+
+        await thread.send(formattedSpeakers, embed=warning)
+    except asyncio.CancelledError:
+        return
+
 activeThreads = {}
 activeGoogleSafeNames = {}
 googleClient = genai.Client(api_key=GEMINI_TOKEN)
@@ -154,7 +176,7 @@ class Ai(commands.Cog):
     @commands.Cog.listener()
     async def on_thread_delete(self, thread):
         if thread.id in activeThreads:
-            if thread.id in activeGoogleSafeNames:
+            if thread.id in activeGoogleSafeNames and thread.id in activeThreads:
                 deleteGoogleMedia(thread.id)
 
             del activeThreads[thread.id]
@@ -197,25 +219,31 @@ class Ai(commands.Cog):
             await reply.send(ctx)
             return
         
-        threadTitle = f"{ctx.author.name}'s conversation with {model}"
-        
-        reply = EmbedReply("AI - Conversation", "ai", description=f"Created new thread for this conversation.")
-    
-        await reply.send(ctx)
+        if not isinstance(ctx.channel, discord.Thread):
+            threadTitle = f"{ctx.author.name}'s conversation with {model}"
 
-        origMessage = await ctx.interaction.original_response()
+            reply = EmbedReply("AI - Conversation", "ai", description=f"Created new thread for this conversation.")
         
-        thread = await origMessage.create_thread(name=threadTitle, auto_archive_duration=60)
+            await reply.send(ctx)
+
+            origMessage = await ctx.interaction.original_response()
+            
+            thread = await origMessage.create_thread(name=threadTitle, auto_archive_duration=60)
+        else:
+            reply = EmbedReply("AI - Conversation - Error", "ai", True, description=f"You cannot create an AI conversation inside of a thread as the command creates a thread in and of itself.\n\nIf you would like to use this command, please invoke it in a text channel which is not a thread.\n\nFor one-line prompts to {model}, use /ai prompt.")
+        
+            await reply.send(ctx)
+            return
 
         if model in ACCEPTED_FILE_TYPES and ACCEPTED_FILE_TYPES[model]:
-            threadInstructions = EmbedReply(f"{model} - Conversation", "ai", description=f"You have started a new conversation with {model}. Attachments supported with this model, simply send whatever in this thread.\n\nReply within this thread to continue the conversation.\n\nTo end this conversation, delete this thread or use /ai end. This thread will also close after {CONVERSATION_INACTIVITY_TIMEOUT} mins of inactivity.")
+            threadInstructions = EmbedReply(f"{model} - Conversation", "ai", description=f"You have started a new conversation with {model}. Attachments supported with this model, simply send whatever in this thread.\n\nReply within this thread to continue the conversation.\n\nTo end this conversation, delete this thread or use /ai end. This thread will also close after {dates.formatSeconds(int(CONVERSATION_INACTIVITY_TIMEOUT * 60))} of inactivity.")
         else:
-            threadInstructions = EmbedReply(f"{model} - Conversation", "ai", description=f"You have started a new conversation with {model}. Attachments not supported with this model.\n\nReply within this thread to continue the conversation.\n\nTo end this conversation, delete this thread or use /ai end. This thread will also close after {CONVERSATION_INACTIVITY_TIMEOUT} mins of inactivity.")
+            threadInstructions = EmbedReply(f"{model} - Conversation", "ai", description=f"You have started a new conversation with {model}. Attachments not supported with this model.\n\nReply within this thread to continue the conversation.\n\nTo end this conversation, delete this thread or use /ai end. This thread will also close after {dates.formatSeconds(int(CONVERSATION_INACTIVITY_TIMEOUT * 60))} of inactivity.")
 
         await thread.send(embed=threadInstructions)
 
         def conversationCheck(message: discord.Message) -> bool:
-            return message.author != self.bot.user and message.channel == thread
+            return ((message.author == self.bot.user and TIMEOUT_RESET_SUCCESS in message.embeds[0].description) or (message.author != self.bot.user)) and (message.channel == thread)
 
         activeThreads[thread.id] = True
         activeGoogleSafeNames[thread.id] = []
@@ -243,8 +271,25 @@ class Ai(commands.Cog):
             await thread.send(embed=reply)
 
         while activeThreads.get(thread.id, False):
+            warningTimer = None
+
+            if INACTIVITY_WARNING:
+                warningTimer = asyncio.create_task(sendEndingWarning(thread, INACTIVITY_WARNING, self.bot))
+            
             try:
                 nextMessage: discord.Message = await self.bot.wait_for("message", check = conversationCheck, timeout = CONVERSATION_INACTIVITY_TIMEOUT * (60))
+
+                if warningTimer:
+                    warningTimer.cancel()
+                    
+                    try:
+                        await warningTimer
+                    except asyncio.CancelledError:
+                        pass
+                
+                if nextMessage.author == self.bot.user and nextMessage.embeds:
+                    if TIMEOUT_RESET_SUCCESS in nextMessage.embeds[0].description:
+                        continue
 
                 async with thread.typing():
                     if model == "Gemini":
@@ -292,7 +337,7 @@ class Ai(commands.Cog):
                 if thread.id not in activeThreads:
                     return
                 
-                activeThreads[thread.id] = False
+                del activeThreads[thread.id]
 
                 deleteGoogleMedia(thread.id)
 
@@ -326,17 +371,44 @@ class Ai(commands.Cog):
                     deleteGoogleMedia(thread.id)
 
                     del activeThreads[thread.id]
+                    
                     await thread.delete()
                 else:
-                    reply = EmbedReply("AI - Error", "ai", True, description="This thread cannot be closed because is not registered as an active AI conversation by the bot. You will need to delete this yourself.")
+                    reply = EmbedReply("AI - End Conversation - Error", "ai", True, description="This thread cannot be closed because is not registered as an active AI conversation by the bot. You will need to delete this yourself.")
 
                     await reply.send(ctx)
             else:
-                reply = EmbedReply("AI - Error", "ai", True, description="This command can only be used in a thread which was created by the /ai conversation command and is registered as an active AI conversation by the bot.")
+                reply = EmbedReply("AI - End Conversation - Error", "ai", True, description="This command can only be used in a thread which was created by the /ai conversation command and is registered as an active AI conversation by the bot.")
 
                 await reply.send(ctx)
         except Exception as e:
-            reply = EmbedReply("AI - Error", "ai", True, description=f"Error occured when ending thread: {e}")
+            reply = EmbedReply("AI - End Conversation - Error", "ai", True, description=f"Error occured when ending thread: {e}")
+
+            await reply.send(ctx)
+
+    @ai.command(description = f"Reset the {CONVERSATION_INACTIVITY_TIMEOUT} min AI conversation inactivity timer.", guild_ids=[799341195109203998])
+    async def timeoutreset(
+        self,
+        ctx: discord.ApplicationContext
+    ):
+        try:
+            if isinstance(ctx.channel, discord.Thread):
+                if ctx.channel.id in activeThreads:
+                    thread = self.bot.get_channel(ctx.channel.id)
+
+                    reply = EmbedReply("AI - Timeout Reset", "ai", description=TIMEOUT_RESET_SUCCESS)
+
+                    await reply.send(ctx)
+                else:
+                    reply = EmbedReply("AI - Timeout Reset - Error", "ai", True, description="This thread's timeout cannot be reset because is not registered as an active AI conversation by the bot. You will need to make a new conversation.")
+
+                    await reply.send(ctx)
+            else:
+                reply = EmbedReply("AI - Timeout Reset - Error", "ai", True, description="This command can only be used in a thread which was created by the /ai conversation command and is registered as an active AI conversation by the bot.")
+
+                await reply.send(ctx)
+        except Exception as e:
+            reply = EmbedReply("AI - Timeout Reset - Error", "ai", True, description=f"Error occured when resetting thread timeout: {e}")
 
             await reply.send(ctx)
 
