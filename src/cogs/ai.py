@@ -25,6 +25,7 @@ MAX_ATTACHMENTS_PER_MESSAGE = 10
 CONVERSATION_INACTIVITY_TIMEOUT = 30 # Minutes for a conversation to be considered inactive.
 INACTIVITY_WARNING = (CONVERSATION_INACTIVITY_TIMEOUT / 4) * 60 if CONVERSATION_INACTIVITY_TIMEOUT >= 1 else 0 # Seconds for a conversation warning to be sent in an inactive thread.
 TIMEOUT_RESET_SUCCESS = f"The timeout for this thread has been reset to {dates.formatSeconds(int(CONVERSATION_INACTIVITY_TIMEOUT * 60))}."
+ARCHIVE_SUCCESS = f"This thread has been archived and spared from deletion.\n\nYou are no longer able to interact with the AI."
 ACCEPTED_FILE_TYPES = {
     "Gemini": {
         "Documents": [
@@ -116,9 +117,16 @@ async def parseAttachments(ctx: discord.ApplicationContext, model: str, attachme
     
     return acceptedAttachments
 
+activeThreads = {}
+activeGoogleSafeNames = {}
+googleClient = genai.Client(api_key=GEMINI_TOKEN)
+
 async def sendEndingWarning(thread: discord.Thread, warnAfter: int, bot: discord.Bot):
     try:
         await asyncio.sleep((CONVERSATION_INACTIVITY_TIMEOUT * 60) - warnAfter)
+
+        if thread.id not in activeThreads:
+            return
 
         formattedLeft = dates.formatSeconds(int(warnAfter))
 
@@ -134,10 +142,8 @@ async def sendEndingWarning(thread: discord.Thread, warnAfter: int, bot: discord
         await thread.send(formattedSpeakers, embed=warning)
     except asyncio.CancelledError:
         return
-
-activeThreads = {}
-activeGoogleSafeNames = {}
-googleClient = genai.Client(api_key=GEMINI_TOKEN)
+    except discord.NotFound:
+        return
 
 def deleteGoogleMedia(threadID: int):
     try:
@@ -174,12 +180,14 @@ class Ai(commands.Cog):
         self.description = "Contains modules for commands that use AI."
     
     @commands.Cog.listener()
-    async def on_thread_delete(self, thread):
-        if thread.id in activeThreads:
-            if thread.id in activeGoogleSafeNames and thread.id in activeThreads:
-                deleteGoogleMedia(thread.id)
+    async def on_raw_thread_delete(self, payload: discord.RawThreadDeleteEvent):
+        threadId = payload.thread_id
 
-            del activeThreads[thread.id]
+        if threadId in activeThreads:
+            if threadId in activeGoogleSafeNames:
+                deleteGoogleMedia(threadId)
+
+            del activeThreads[threadId]
 
     ai = discord.SlashCommandGroup("ai", "A collection of commands for prompting AI models.", guild_ids=[799341195109203998])
     
@@ -243,7 +251,12 @@ class Ai(commands.Cog):
         await thread.send(embed=threadInstructions)
 
         def conversationCheck(message: discord.Message) -> bool:
-            return ((message.author == self.bot.user and TIMEOUT_RESET_SUCCESS in message.embeds[0].description) or (message.author != self.bot.user)) and (message.channel == thread)
+            try:
+                return ((message.author == self.bot.user and TIMEOUT_RESET_SUCCESS in message.embeds[0].description) or (message.author != self.bot.user)) and (message.channel == thread)
+            except IndexError as e:
+                return e
+            except discord.NotFound as e:
+                return e
 
         activeThreads[thread.id] = True
         activeGoogleSafeNames[thread.id] = []
@@ -270,7 +283,7 @@ class Ai(commands.Cog):
 
             await thread.send(embed=reply)
 
-        while activeThreads.get(thread.id, False):
+        while thread.id in activeThreads:
             warningTimer = None
 
             if INACTIVITY_WARNING:
@@ -335,7 +348,7 @@ class Ai(commands.Cog):
                 await thread.send(embed=reply)
             except asyncio.TimeoutError:
                 if thread.id not in activeThreads:
-                    return
+                    break
                 
                 del activeThreads[thread.id]
 
@@ -349,14 +362,19 @@ class Ai(commands.Cog):
 
                 await closeConversationReply.send(ctx)
 
-                return
+                break
+            except discord.NotFound:
+                # Thread is already deleted. Only accessed when threads are ended and the wait_for expires.
+                break
             except asyncio.CancelledError:
                 # If the thread was manually deleted while waiting, safely exit.
-                return
+                break
             except Exception as e:
                 reply = EmbedReply("AI - Error", "ai", True, description=f"Error in thread: {e}")
 
                 await thread.send(embed=reply)
+        
+        print(f"CONVERSATION LOG: Terminated/Exited conversation while loop with thread ID: {thread.id}")
     
     @ai.command(description = "End a conversation with an LLM. Only usable inside of threads invoked by /ai conversation.", guild_ids=[799341195109203998])
     async def end(
@@ -367,10 +385,6 @@ class Ai(commands.Cog):
             if isinstance(ctx.channel, discord.Thread):
                 if ctx.channel.id in activeThreads:
                     thread = self.bot.get_channel(ctx.channel.id)
-
-                    deleteGoogleMedia(thread.id)
-
-                    del activeThreads[thread.id]
                     
                     await thread.delete()
                 else:
@@ -409,6 +423,36 @@ class Ai(commands.Cog):
                 await reply.send(ctx)
         except Exception as e:
             reply = EmbedReply("AI - Timeout Reset - Error", "ai", True, description=f"Error occured when resetting thread timeout: {e}")
+
+            await reply.send(ctx)
+
+    @ai.command(description = f"Archive an AI conversation and spare deletion. You won't be able to interact with the model.", guild_ids=[799341195109203998])
+    async def archive(
+        self,
+        ctx: discord.ApplicationContext
+    ):
+        try:
+            if isinstance(ctx.channel, discord.Thread):
+                if ctx.channel.id in activeThreads:
+                    thread = self.bot.get_channel(ctx.channel.id)
+
+                    reply = EmbedReply("AI - Archive", "ai", description=ARCHIVE_SUCCESS)
+
+                    await reply.send(ctx)
+
+                    del activeThreads[thread.id]
+
+                    await thread.archive(locked=True)
+                else:
+                    reply = EmbedReply("AI - Archive - Error", "ai", True, description="This thread cannot be archived because is not registered as an active AI conversation by the bot. You will need to make a new conversation.")
+
+                    await reply.send(ctx)
+            else:
+                reply = EmbedReply("AI - Archive - Error", "ai", True, description="This command can only be used in a thread which was created by the /ai conversation command and is registered as an active AI conversation by the bot.")
+
+                await reply.send(ctx)
+        except Exception as e:
+            reply = EmbedReply("AI - Archive - Error", "ai", True, description=f"Error occured when resetting thread timeout: {e}")
 
             await reply.send(ctx)
 
