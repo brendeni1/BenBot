@@ -8,6 +8,7 @@ import re
 import discord.types
 import asyncio
 from google import genai
+from google.genai.errors import ServerError
 import tempfile
 import urllib
 
@@ -369,10 +370,21 @@ class Ai(commands.Cog):
             except asyncio.CancelledError:
                 # If the thread was manually deleted while waiting, safely exit.
                 break
+            except ServerError as e:
+                reply = EmbedReply("AI - Error", "ai", True)
+
+                if e.message == "The model is overloaded. Please try again later.":
+                    reply.description = "You've provided too large of files to the model. All context has been removed and you are back to where the chat started."
+                else:
+                    reply.description = e.message
+                
+                await thread.send(embed=reply)
+                continue
             except Exception as e:
                 reply = EmbedReply("AI - Error", "ai", True, description=f"Error in thread: {e}")
 
                 await thread.send(embed=reply)
+                
         
         print(f"CONVERSATION LOG: Terminated/Exited conversation while loop with thread ID: {thread.id}")
     
