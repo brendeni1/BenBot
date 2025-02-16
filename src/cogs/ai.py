@@ -239,6 +239,7 @@ class Ai(commands.Cog):
             origMessage = await ctx.interaction.original_response()
             
             thread = await origMessage.create_thread(name=threadTitle, auto_archive_duration=60)
+
         else:
             reply = EmbedReply("AI - Conversation - Error", "ai", True, description=f"You cannot create an AI conversation inside of a thread as the command creates a thread in and of itself.\n\nIf you would like to use this command, please invoke it in a text channel which is not a thread.\n\nFor one-line prompts to {model}, use /ai prompt.")
         
@@ -366,13 +367,13 @@ class Ai(commands.Cog):
 
                 deleteGoogleMedia(thread.id)
 
+                await thread.parent.send(embed=closeConversationReply)
+
                 try:
                     await thread.delete()
                 except discord.NotFound:
                     # Thread is already deleted
                     pass
-
-                await closeConversationReply.send(ctx)
 
                 break
             except discord.NotFound:
