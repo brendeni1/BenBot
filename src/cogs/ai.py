@@ -198,7 +198,7 @@ class Ai(commands.Cog):
         ctx: discord.ApplicationContext,
         prompt: discord.Option(
             str,
-            description="Stating prompt to ask AI. This will open a Discord thread.",
+            description="Starting prompt to ask AI. This will open a Discord thread.",
             required = True
         ), # type: ignore
         model: discord.Option(
