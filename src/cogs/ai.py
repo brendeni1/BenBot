@@ -44,7 +44,8 @@ ACCEPTED_FILE_TYPES = {
             "application/x-javascript",
             "text/javascript",
             "application/x-python",
-            "text/x-python"
+            "text/x-python",
+            "text/x-python; charset=utf-8"
         ],
         "Images": [
             "image/png",
@@ -253,11 +254,13 @@ class Ai(commands.Cog):
 
         def conversationCheck(message: discord.Message) -> bool:
             try:
-                return ((message.author == self.bot.user and TIMEOUT_RESET_SUCCESS in message.embeds[0].description) or (message.author != self.bot.user)) and (message.channel == thread)
+                return all([(message.author == self.bot.user and TIMEOUT_RESET_SUCCESS == message.embeds[0].description) or (message.author != self.bot.user), message.channel == thread])
             except IndexError as e:
-                return e
+                return False
             except discord.NotFound as e:
                 return e
+            except Exception as e:
+                raise e
 
         activeThreads[thread.id] = True
         activeGoogleSafeNames[thread.id] = []
@@ -269,12 +272,15 @@ class Ai(commands.Cog):
                 if model == "Gemini":
                     await asyncio.to_thread(chat.send_message, f"{SYSTEM_MESSAGE} You can also accept attachments. If the user doesn't know what attachments they can use, tell them to use the '/ai filetypes' command.")
                     initialPrompt = await asyncio.to_thread(chat.send_message, f"{prompt}")
+                    
+                    splitForDiscord = text.truncateString(initialPrompt.text, 4096, splitOnMax=True)
 
-                    initialPromptReply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(initialPrompt.text, 4096))
+                    for num, chunk in enumerate(splitForDiscord, 1):
+                        initialPromptReply = EmbedReply(f"{model} - Reply - ({num}/{len(splitForDiscord)})", "ai", description=chunk)
+                        
+                        await thread.send(embed=initialPromptReply)
                 else:
                     raise ValueError("Nonexistent model name in initial prompt.")
-            
-            await thread.send(embed=initialPromptReply)
         except discord.NotFound as e:
             reply = EmbedReply(f"{model} - Error", "ai", True, description=f"Error in conversation when replying to prompt: {e}")
 
@@ -342,11 +348,16 @@ class Ai(commands.Cog):
 
                         response = await asyncio.to_thread(chat.send_message, content)
 
-                        reply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(response.text, 4096))
+                        splitForDiscord = text.truncateString(response.text, 4096, splitOnMax=True)
+
+                        for num, chunk in enumerate(splitForDiscord, 1):
+                            reply = EmbedReply(f"{model} - Reply - ({num}/{len(splitForDiscord)})", "ai", description=chunk)
+                            
+                            await thread.send(embed=reply)
+                        
+                        continue
                     else:
                         raise ValueError("Nonexistent model name in conversation prompt.")
-
-                await thread.send(embed=reply)
             except asyncio.TimeoutError:
                 if thread.id not in activeThreads:
                     break
@@ -501,11 +512,19 @@ class Ai(commands.Cog):
                 
                 response = googleClient.models.generate_content(model="gemini-2.0-flash", contents=[SYSTEM_MESSAGE, prompt], config=chatConfig)
 
-                reply = EmbedReply(f"{model} - Reply", "ai", description=text.truncateString(response.text, 4096))
+                splitForDiscord = text.truncateString(response.text, 4096, splitOnMax=True)
+
+                for num, chunk in enumerate(splitForDiscord, 1):
+                    reply = EmbedReply(f"{model} - Reply - ({num}/{len(splitForDiscord)})", "ai", description=chunk)
+                    
+                    if num == 1:
+                        await ctx.followup.send(embed=reply)
+
+                        continue
+                    
+                    await reply.send(ctx)
             else:
                 raise ValueError("Nonexistent model name in prompt.")
-
-            await ctx.followup.send(embed=reply)
         except discord.NotFound as e:
             reply = EmbedReply(f"{model} - Error", "ai", True, description=f"Error when replying to prompt: {e}")
 
