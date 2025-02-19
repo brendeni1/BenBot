@@ -4,6 +4,7 @@ from discord.ext import commands
 
 import instaloader
 import os
+from itertools import islice
 
 from src.classes import *
 from src.utils import dates
@@ -17,6 +18,7 @@ INSTA_PASSWORD = os.getenv("INSTA_PASSWORD")
 CC_USERNAME = "caffeinatedcollectivee"
 SP_USERNAME = "sophiapapiaa"
 
+MAX_PINNED_INSTA = 3
 class Instagram(commands.Cog):
     ISCOG = True
 
@@ -35,18 +37,18 @@ class Instagram(commands.Cog):
 
     def fetchLatestPost(self, username: str) -> instaloader.Post:
         profile = instaloader.Profile.from_username(self.instaAPI.context, username)
+
+        if profile.is_private:
+            raise Exception(f"The user {username} has their profile set to private.")
             
-        posts = profile.get_posts()
+        posts = list(islice(profile.get_posts(), MAX_PINNED_INSTA + 1))
 
-        latestNonPinned = None
+        if not posts:
+            return None
 
-        for post in posts:
-            if post.is_pinned:  # Check if the post is pinned
-                continue  # Skip pinned posts
-            latestNonPinned = post
-            break
+        posts.sort(key=lambda post: post.date_utc, reverse=True)
 
-        return latestNonPinned
+        return posts[0]
     
     def fetchEssentialsFromPost(self, post: instaloader.Post):
         if not post:
@@ -90,7 +92,7 @@ class Instagram(commands.Cog):
             reply.set_thumbnail(url=postDetails["profilePicture"])
             reply.description = f"[{username}](https://www.instagram.com/{username}/) posted:\n\n{postDetails["caption"]}"
             reply.set_image(url=postDetails["media"])
-            reply.set_footer(text=f"{postDetails["commentCount"]} Comment(s) · Posted on {dates.formatSimpleDate(timestamp=postDetails["date"])}")
+            reply.set_footer(text=f"{postDetails["commentCount"]} Comment(s) · Posted on {dates.formatSimpleDate(timestamp=postDetails["date"])} UTC")
 
             await ctx.followup.send(embed=reply)
         except instaloader.ProfileNotExistsException:
@@ -98,7 +100,7 @@ class Instagram(commands.Cog):
 
             await ctx.followup.send(embed=reply)
         except Exception as e:
-            reply = EmbedReply("Posts - Instagram - Error", "posts", True, description=f"Error when retrieving post: {e}.")
+            reply = EmbedReply("Posts - Instagram - Error", "posts", True, description=f"Error: {e}.")
 
             await ctx.followup.send(embed=reply)
 
