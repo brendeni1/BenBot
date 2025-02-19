@@ -13,7 +13,7 @@ class MyCog(commands.Cog):
         self.description = "Template for cogs."
     
     @discord.slash_command(description = "Template for commands.", guild_ids=[799341195109203998])
-    async def command(self, ctx):
+    async def command(self, ctx: discord.ApplicationContext):
         pass
 
 def setup(bot):
