@@ -1,4 +1,5 @@
 import datetime
+from dateutil import parser
 
 def formatSeconds(seconds: int):
     """
@@ -31,7 +32,7 @@ def formatSeconds(seconds: int):
         if seconds >= unit_seconds:
             count = seconds // unit_seconds
             seconds %= unit_seconds
-            result.append(f"{count}{unit}")
+            result.append(f"{round(count)}{unit}")
         # Stop once we have two nonzero units.
         if len(result) == 2:
             break
@@ -39,7 +40,7 @@ def formatSeconds(seconds: int):
     # If all units are zero, return "0s".
     return " ".join(result) if result else "0s"
 
-def formatSimpleDate(*, timestamp = None, includeTime: bool = True, timeNow: bool = False) -> str:
+def formatSimpleDate(timestamp: str | datetime.datetime = None, *, includeTime: bool = True, timeNow: bool = False) -> str:
     if not timestamp and not timeNow:
         raise ValueError("No timestamp provided to src.utils.dates.formatSimpleDate.")
     
@@ -47,7 +48,7 @@ def formatSimpleDate(*, timestamp = None, includeTime: bool = True, timeNow: boo
         timestamp = datetime.datetime.now()
     
     if not isinstance(timestamp, datetime.datetime):
-        timestamp = datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+        timestamp = parser.parse(timestamp)
 
     if includeTime:
         formattedDate = timestamp.strftime("%b %#d %Y %#I:%M %p")
@@ -56,14 +57,48 @@ def formatSimpleDate(*, timestamp = None, includeTime: bool = True, timeNow: boo
     
     return formattedDate
 
-def simpleDateObj(*, timestamp = None, timeNow: bool = False) -> str:
+def simpleDateObj(timestamp: None | datetime.datetime | str = None, *, timeNow: bool = False) -> str:
     if not timestamp and not timeNow:
-        raise ValueError("No timestamp provided to src.utils.dates.formatSimpleDate.")
+        raise ValueError("No timestamp provided to src.utils.dates.simpleDateObj.")
     
     if timeNow:
         timestamp = datetime.datetime.now()
     
     if not isinstance(timestamp, datetime.datetime):
-        timestamp = datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+        timestamp = timestamp = parser.parse(timestamp)
 
     return timestamp
+
+def deltaInSeconds(timestamp1: str | datetime.datetime, timestamp2: str | datetime.datetime | None = None, *, againstTimeNow: bool = False, utc = False) -> int:
+    if not timestamp2 and not againstTimeNow:
+        raise ValueError("No 2 timestamps provided to src.utils.dates.deltaInSeconds or againstTimeNow not specified.")
+    
+    if againstTimeNow:
+        if utc:
+            timestamp2 = datetime.datetime.now(datetime.timezone.utc)
+        else:
+            timestamp2 = datetime.datetime.now()
+    
+    if not isinstance(timestamp1, datetime.datetime):
+        if utc:
+            timestamp1 = timestamp = parser.parse(timestamp1)
+
+            timestamp1 = timestamp1.replace(tzinfo=datetime.timezone.utc)
+        else:
+            timestamp1 = timestamp = parser.parse(timestamp1)
+
+    if not isinstance(timestamp2, datetime.datetime):
+        if utc:
+            timestamp2 = timestamp = parser.parse(timestamp2)
+
+            timestamp2 = timestamp2.replace(tzinfo=datetime.timezone.utc)
+        else:
+            timestamp2 = timestamp = parser.parse(timestamp2)
+
+    if utc:
+        timestamp1 = timestamp1.replace(tzinfo=datetime.timezone.utc)
+        timestamp2 = timestamp2.replace(tzinfo=datetime.timezone.utc)
+
+    delta = timestamp1 - timestamp2
+    
+    return delta.total_seconds()
