@@ -11,6 +11,11 @@ from src.classes import *
 
 MAX_FIELDS_EMBED: int = 25
 
+EDITABLE_TABLES: list[str] = [
+    "jokes",
+    "taylortracker"
+]
+
 class JokeModal(discord.ui.Modal):
     ISCOG = False
 
@@ -46,6 +51,8 @@ class DataCommands(commands.Cog):
             required=True
         ) # type: ignore
     ):
+        database = LocalDatabase()
+
         if table == "jokes":
             modal = JokeModal("Enter the details of the joke.")
 
@@ -87,8 +94,6 @@ class DataCommands(commands.Cog):
             selection = memberView.children[0]
             expense = selection.values[0]
 
-            database = LocalDatabase()
-
             try:
                 database.setOne(f"INSERT INTO jokes (createdBy, createdGuild, createdChannel, setup, punchline, expense) VALUES (?,?,?,?,?,?)", (createdBy, createdGuild, createdChannel, setup, punchline, expense))
 
@@ -123,8 +128,29 @@ class DataCommands(commands.Cog):
                 reply = EmbedReply("Add Data - Error", "data", True, description=f"Your joke could not be added: {e}")
 
                 await reply.send(ctx)
+        elif table == "taylortracker":
+            try:
+                currentChannel = ctx.channel_id
+
+                channels = database.get(f"SELECT * FROM {table} WHERE receivingChannel = {currentChannel}")
+
+                if channels:
+                    reply = EmbedReply("Add Data - Taylor Tracker - Error", "data", True, description="This channel is already enrolled in flight updates for Taylor Swift's jets.\n\nUse /data delete to disable (put a random number in the ID field when using the command).")
+
+                    await reply.send(ctx)
+                    return
+                
+                database.setOne(f"INSERT INTO {table} (receivingChannel) VALUES (?)", (currentChannel,))
+
+                reply = EmbedReply("Add Data - Taylor Tracker", "data", description="Successfully enrolled this chat in flight updates for Taylor Swift's jets.\n\nUse /data delete to undo (put a random number in the ID field when using the command).")
+
+                await reply.send(ctx)
+            except Exception as e:
+                reply = EmbedReply("Add Data - Taylor Tracker - Error", "data", True, description=f"Error: {e}")
+
+                await reply.send(ctx)
         else:
-            reply = EmbedReply("Add Data - Error", "data", True, description=f"You chose a table that doesn't exist in the list of tables accoring to the DB. Choice: {table}")
+            reply = EmbedReply("Add Data - Error", "data", True, description=f"You chose a table that doesn't exist or doesn't support the ability to be edited. Choice: {table}")
 
             await reply.send(ctx)
 
@@ -175,8 +201,26 @@ class DataCommands(commands.Cog):
                 reply = EmbedReply("View Data - Error", "data", True, description=f"Error: {e}")
 
                 await reply.send(ctx)
+        elif table == "taylortracker":
+            try:
+                currentChannel = ctx.channel_id
+
+                channels = database.get(f"SELECT * FROM {table} WHERE receivingChannel = {currentChannel}")
+
+                if channels:
+                    reply = EmbedReply("View Data - Taylor Tracker", "data", description="This channel is enrolled in flight updates for Taylor Swift's jets.\n\nUse /data delete to disable (put a random number in the ID field when using the command).")
+
+                    await reply.send(ctx)
+                else:
+                    reply = EmbedReply("View Data - Taylor Tracker", "data", True, description="This channel is not enrolled in flight updates for Taylor Swift's jets.\n\nUse /data add to enable.")
+
+                    await reply.send(ctx)
+            except Exception as e:
+                reply = EmbedReply("View Data - Taylor Tracker - Error", "data", True, description=f"Error: {e}")
+
+                await reply.send(ctx)
         else:
-            reply = EmbedReply("View Data - Error", "data", True, description=f"You chose a table that doesn't exist in the list of tables accoring to the DB. Choice: {table}")
+            reply = EmbedReply("View Data - Error", "data", True, description=f"You chose a table that doesn't exist or doesn't support the ability to be viewed. Choice: {table}")
 
             await reply.send(ctx)
 
@@ -192,25 +236,52 @@ class DataCommands(commands.Cog):
         ), # type: ignore
         id: discord.Option(
             int,
-            description="ID to delete. Use /view to see IDs for data within tables.",
+            description="ANY NUMBER IF U ARE DOING TAYLORTRACKER!! ID to delete. Use /view to see IDs for data within tables.",
             required=True
         ) # type: ignore
     ):
         database = LocalDatabase()
 
-        try:
-            results = database.get(f"SELECT id FROM {table} WHERE id >= ?", (id,))
+        if table == "taylortracker":
+            try:
+                currentChannel = ctx.channel_id
 
-            if not results:
-                raise Exception(f"No data in table {table} available for that ID.")
+                channels = database.get(f"SELECT * FROM {table} WHERE receivingChannel = {currentChannel}")
 
-            database.query(f"DELETE FROM {table} WHERE id = ?", (id,))
+                if not channels:
+                    reply = EmbedReply("Delete Data - Taylor Tracker - Error", "data", True, description="This channel is not enrolled in flight updates for Taylor Swift's jets.\n\nUse /data add to enable.")
 
-            reply = EmbedReply("Delete Data - Success", "data", description=f"Deleted {len(results)} record in {table} where ID: {id}")
+                    await reply.send(ctx)
+                    return
+                
+                database.query(f"DELETE FROM {table} WHERE receivingChannel = ?", (currentChannel,))
 
-            await reply.send(ctx)
-        except Exception as e:
-            reply = EmbedReply("Delete Data - Error", "data", True, description=f"Error: {e}")
+                reply = EmbedReply("Delete Data - Taylor Tracker", "data", description="Successfully un-enrolled this chat in flight updates for Taylor Swift's jets.\n\nUse /data add to undo.")
+
+                await reply.send(ctx)
+            except Exception as e:
+                reply = EmbedReply("Delete Data - Taylor Tracker - Error", "data", True, description=f"Error: {e}")
+
+                await reply.send(ctx)
+        elif table in EDITABLE_TABLES:
+            try:
+                results = database.get(f"SELECT id FROM {table} WHERE id >= ?", (id,))
+
+                if not results:
+                    raise Exception(f"No data in table {table} available for that ID.")
+
+                database.query(f"DELETE FROM {table} WHERE id = ?", (id,))
+
+                reply = EmbedReply("Delete Data - Success", "data", description=f"Deleted {len(results)} record in {table} where ID: {id}")
+
+                await reply.send(ctx)
+
+            except Exception as e:
+                reply = EmbedReply("Delete Data - Error", "data", True, description=f"Error: {e}")
+
+                await reply.send(ctx)
+        else:
+            reply = EmbedReply("Delete Data - Error", "data", True, description=f"You chose a table that doesn't exist or doesn't support the ability to be edited. Choice: {table}")
 
             await reply.send(ctx)
 

@@ -141,7 +141,7 @@ class LocalDatabase:
             cursor.close()
             connection.close()
     
-    def setMany(self, query: str, data: list[tuple]):
+    def setMany(self, query: str, data: tuple):
         try:
             connection = sqlite3.connect(f"src/data/{self.database}")
             cursor = connection.cursor()
@@ -155,7 +155,7 @@ class LocalDatabase:
             cursor.close()
             connection.close()
 
-    def query(self, query: str, data: list[tuple]):
+    def query(self, query: str, data: tuple):
         try:
             connection = sqlite3.connect(f"src/data/{self.database}")
             cursor = connection.cursor()
