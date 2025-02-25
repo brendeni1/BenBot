@@ -5,6 +5,7 @@ import dotenv
 from src import Bot
 
 from src.utils.files import clear_temp_folder
+from src.utils.terminal import cls
 
 # Load the .env secret file.
 dotenv.load_dotenv()
@@ -15,7 +16,7 @@ COGS_PATH = "src.cogs"
 BOT_TOKEN = os.getenv("DISCORD_TOKEN")
 
 # Clear terminal.
-os.system("cls")
+cls()
 clear_temp_folder()
 
 # Enable all intents for the bot.

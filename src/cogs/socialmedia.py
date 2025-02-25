@@ -50,7 +50,8 @@ class Instagram(commands.Cog):
 
         posts.sort(key=lambda post: post.date_utc, reverse=True)
 
-        storyItem: instaloader.StoryItem = list(islice(stories[0].get_items(), 1))[0]
+        if stories:
+            storyItem: instaloader.StoryItem = list(islice(stories[0].get_items(), 1))[0]
 
         if stories and posts:
             if storyItem.date_utc > posts[0].date_utc:
