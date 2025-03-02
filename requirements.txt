@@ -25,7 +25,6 @@ pydantic==2.11.0a2
 pydantic_core==2.29.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
-pywin32==308
 requests==2.32.3
 rsa==4.9
 shadowcopy==0.0.4
@@ -34,5 +33,4 @@ Telethon==1.39.0
 typing_extensions==4.12.2
 urllib3==2.3.0
 websockets==14.2
-WMI==1.5.1
 yarl==1.18.3
