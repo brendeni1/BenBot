@@ -1,1 +1,1 @@
-C:\Users\brend\Coding\Python\BenBot\.venv\Scripts\pythonw.exe C:\Users\brend\Coding\Python\BenBot\main.py %*
+C:\Users\Brenden\Coding\Python\BenBot\.venv\Scripts\pythonw.exe C:\Users\Brenden\Coding\Python\BenBot\main.py
