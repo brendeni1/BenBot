@@ -116,7 +116,7 @@ class Instagram(commands.Cog):
 
         #     await ctx.followup.send(embed=reply)
         
-        reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: Instagram is allergic to fun and banned the BenBot account for botting--ironically, they discontinuedthe only official way to get a users latest Instagram post. Shame on Meta.\n\nThis command is deprecated.")
+        reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: Instagram is allergic to fun and banned the BenBot account for botting--ironically, they discontinued the only official way to get a users latest Instagram post. Shame on Meta.\n\nThis command is deprecated.")
 
         await reply.send(ctx)
 
@@ -164,7 +164,7 @@ class Instagram(commands.Cog):
 
         #     await ctx.followup.send(embed=reply)
         
-        reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: Instagram is allergic to fun and banned the BenBot account for botting--ironically, they discontinuedthe only official way to get a users latest Instagram post. Shame on Meta.\n\nThis command is deprecated.")
+        reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: Instagram is allergic to fun and banned the BenBot account for botting--ironically, they discontinued the only official way to get a users latest Instagram post. Shame on Meta.\n\nThis command is deprecated.")
 
         await reply.send(ctx)
 
@@ -212,7 +212,7 @@ class Instagram(commands.Cog):
 
         #     await ctx.followup.send(embed=reply)
         
-        reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: Instagram is allergic to fun and banned the BenBot account for botting--ironically, they discontinuedthe only official way to get a users latest Instagram post. Shame on Meta.\n\nThis command is deprecated.")
+        reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: Instagram is allergic to fun and banned the BenBot account for botting--ironically, they discontinued the only official way to get a users latest Instagram post. Shame on Meta.\n\nThis command is deprecated.")
 
         await reply.send(ctx)
 
