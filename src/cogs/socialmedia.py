@@ -74,135 +74,147 @@ class Instagram(commands.Cog):
             description="Provide the username of the person to fetch the latest media."
         )
     ):
-        await ctx.defer()
+        # await ctx.defer()
 
-        try:
-            media = self.fetchLatestMedia(username)
+        # try:
+        #     media = self.fetchLatestMedia(username)
 
-            if not media:
-                reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"The user {username} doesn't have any posts/stories.")
+        #     if not media:
+        #         reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"The user {username} doesn't have any posts/stories.")
 
-                await ctx.followup.send(embed=reply)
-                return
+        #         await ctx.followup.send(embed=reply)
+        #         return
             
-            reply = EmbedReply("Media - Instagram", "socialmedia")
+        #     reply = EmbedReply("Media - Instagram", "socialmedia")
 
-            if isinstance(media, instaloader.Post):
-                profilePic, caption, image, date, commentCount = media.owner_profile.profile_pic_url, media.caption if media.caption else "<No Caption Provided>", media.url, media.date_utc, media.comments
+        #     if isinstance(media, instaloader.Post):
+        #         profilePic, caption, image, date, commentCount = media.owner_profile.profile_pic_url, media.caption if media.caption else "<No Caption Provided>", media.url, media.date_utc, media.comments
                 
-                reply.set_thumbnail(url=profilePic)
-                reply.description = f"[{username}](https://www.instagram.com/{username}/) posted a new photo:\n\n{caption}"
-                reply.set_image(url=image)
-                reply.set_footer(text=f"{commentCount} Comment(s) · Posted on {dates.formatSimpleDate(timestamp=date)} UTC")
-            elif isinstance(media, instaloader.StoryItem):
-                profilePic, caption, image, date, expiry = media.owner_profile.profile_pic_url, media.caption if media.caption else "<No Caption Provided>", media.url, media.date_utc, media.expiring_utc
+        #         reply.set_thumbnail(url=profilePic)
+        #         reply.description = f"[{username}](https://www.instagram.com/{username}/) posted a new photo:\n\n{caption}"
+        #         reply.set_image(url=image)
+        #         reply.set_footer(text=f"{commentCount} Comment(s) · Posted on {dates.formatSimpleDate(timestamp=date)} UTC")
+        #     elif isinstance(media, instaloader.StoryItem):
+        #         profilePic, caption, image, date, expiry = media.owner_profile.profile_pic_url, media.caption if media.caption else "<No Caption Provided>", media.url, media.date_utc, media.expiring_utc
 
-                expiryDelta = dates.deltaInSeconds(expiry, againstTimeNow=True, utc=True)
+        #         expiryDelta = dates.deltaInSeconds(expiry, againstTimeNow=True, utc=True)
 
-                formattedExpiry = dates.formatSeconds(expiryDelta)
+        #         formattedExpiry = dates.formatSeconds(expiryDelta)
                 
-                reply.set_thumbnail(url=profilePic)
-                reply.description = f"[{username}](https://www.instagram.com/{username}/) posted a new story:\n\n{caption}"
-                reply.set_image(url=image)
-                reply.set_footer(text=f"Story Expires In {formattedExpiry} · Posted on {dates.formatSimpleDate(timestamp=date)} UTC")
+        #         reply.set_thumbnail(url=profilePic)
+        #         reply.description = f"[{username}](https://www.instagram.com/{username}/) posted a new story:\n\n{caption}"
+        #         reply.set_image(url=image)
+        #         reply.set_footer(text=f"Story Expires In {formattedExpiry} · Posted on {dates.formatSimpleDate(timestamp=date)} UTC")
 
-            await ctx.followup.send(embed=reply)
-        except instaloader.ProfileNotExistsException:
-            reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"The user {username} doesn't exist.")
+        #     await ctx.followup.send(embed=reply)
+        # except instaloader.ProfileNotExistsException:
+        #     reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"The user {username} doesn't exist.")
 
-            await ctx.followup.send(embed=reply)
-        except Exception as e:
-            reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: {e}.")
+        #     await ctx.followup.send(embed=reply)
+        # except Exception as e:
+        #     reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: {e}.")
 
-            await ctx.followup.send(embed=reply)
+        #     await ctx.followup.send(embed=reply)
+        
+        reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: Instagram is allergic to fun and banned the BenBot account for botting--ironically, they discontinuied the only official way to get a users latest Instagram post. Shame on Meta.\n\nThis command is deprecated.")
+
+        await reply.send(ctx)
 
     @instaGroup.command(description = "Fetches the latest media from Windsor's most lucrative business, Caffinated Collective. ☕🍵", guild_ids=[799341195109203998])
     async def cc(self, ctx):
-        await ctx.defer()
+        # await ctx.defer()
 
-        try:
-            media = self.fetchLatestMedia(CC_USERNAME)
+        # try:
+        #     media = self.fetchLatestMedia(CC_USERNAME)
 
-            if not media:
-                reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"The user {CC_USERNAME} doesn't have any posts/stories.")
+        #     if not media:
+        #         reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"The user {CC_USERNAME} doesn't have any posts/stories.")
 
-                await ctx.followup.send(embed=reply)
-                return
+        #         await ctx.followup.send(embed=reply)
+        #         return
             
-            reply = EmbedReply("Media - Instagram", "socialmedia")
+        #     reply = EmbedReply("Media - Instagram", "socialmedia")
 
-            if isinstance(media, instaloader.Post):
-                profilePic, caption, image, date, commentCount = media.owner_profile.profile_pic_url, media.caption if media.caption else "<No Caption Provided>", media.url, media.date_utc, media.comments
+        #     if isinstance(media, instaloader.Post):
+        #         profilePic, caption, image, date, commentCount = media.owner_profile.profile_pic_url, media.caption if media.caption else "<No Caption Provided>", media.url, media.date_utc, media.comments
                 
-                reply.set_thumbnail(url=profilePic)
-                reply.description = f"[{CC_USERNAME}](https://www.instagram.com/{CC_USERNAME}/) posted a new photo:\n\n{caption}"
-                reply.set_image(url=image)
-                reply.set_footer(text=f"{commentCount} Comment(s) · Posted on {dates.formatSimpleDate(timestamp=date)} UTC")
-            elif isinstance(media, instaloader.StoryItem):
-                profilePic, caption, image, date, expiry = media.owner_profile.profile_pic_url, media.caption if media.caption else "<No Caption Provided>", media.url, media.date_utc, media.expiring_utc
+        #         reply.set_thumbnail(url=profilePic)
+        #         reply.description = f"[{CC_USERNAME}](https://www.instagram.com/{CC_USERNAME}/) posted a new photo:\n\n{caption}"
+        #         reply.set_image(url=image)
+        #         reply.set_footer(text=f"{commentCount} Comment(s) · Posted on {dates.formatSimpleDate(timestamp=date)} UTC")
+        #     elif isinstance(media, instaloader.StoryItem):
+        #         profilePic, caption, image, date, expiry = media.owner_profile.profile_pic_url, media.caption if media.caption else "<No Caption Provided>", media.url, media.date_utc, media.expiring_utc
 
-                expiryDelta = dates.deltaInSeconds(expiry, againstTimeNow=True, utc=True)
+        #         expiryDelta = dates.deltaInSeconds(expiry, againstTimeNow=True, utc=True)
 
-                formattedExpiry = dates.formatSeconds(expiryDelta)
+        #         formattedExpiry = dates.formatSeconds(expiryDelta)
                 
-                reply.set_thumbnail(url=profilePic)
-                reply.description = f"[{CC_USERNAME}](https://www.instagram.com/{CC_USERNAME}/) posted a new story:\n\n{caption}"
-                reply.set_image(url=image)
-                reply.set_footer(text=f"Story Expires In {formattedExpiry} · Posted on {dates.formatSimpleDate(timestamp=date)} UTC")
+        #         reply.set_thumbnail(url=profilePic)
+        #         reply.description = f"[{CC_USERNAME}](https://www.instagram.com/{CC_USERNAME}/) posted a new story:\n\n{caption}"
+        #         reply.set_image(url=image)
+        #         reply.set_footer(text=f"Story Expires In {formattedExpiry} · Posted on {dates.formatSimpleDate(timestamp=date)} UTC")
 
-            await ctx.followup.send(embed=reply)
-        except instaloader.ProfileNotExistsException:
-            reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"The user {CC_USERNAME} doesn't exist.")
+        #     await ctx.followup.send(embed=reply)
+        # except instaloader.ProfileNotExistsException:
+        #     reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"The user {CC_USERNAME} doesn't exist.")
 
-            await ctx.followup.send(embed=reply)
-        except Exception as e:
-            reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: {e}.")
+        #     await ctx.followup.send(embed=reply)
+        # except Exception as e:
+        #     reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: {e}.")
 
-            await ctx.followup.send(embed=reply)
+        #     await ctx.followup.send(embed=reply)
+        
+        reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: Instagram is allergic to fun and banned the BenBot account for botting--ironically, they discontinuied the only official way to get a users latest Instagram post. Shame on Meta.\n\nThis command is deprecated.")
+
+        await reply.send(ctx)
 
     @instaGroup.command(description = "Fetches the latest media from the businesswoman herself, Sophia Papia. 😍💼", guild_ids=[799341195109203998])
     async def sp(self, ctx):
-        await ctx.defer()
+        # await ctx.defer()
 
-        try:
-            media = self.fetchLatestMedia(SP_USERNAME)
+        # try:
+        #     media = self.fetchLatestMedia(SP_USERNAME)
 
-            if not media:
-                reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"The user {SP_USERNAME} doesn't have any posts/stories.")
+        #     if not media:
+        #         reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"The user {SP_USERNAME} doesn't have any posts/stories.")
 
-                await ctx.followup.send(embed=reply)
-                return
+        #         await ctx.followup.send(embed=reply)
+        #         return
             
-            reply = EmbedReply("Media - Instagram", "socialmedia")
+        #     reply = EmbedReply("Media - Instagram", "socialmedia")
 
-            if isinstance(media, instaloader.Post):
-                profilePic, caption, image, date, commentCount = media.owner_profile.profile_pic_url, media.caption if media.caption else "<No Caption Provided>", media.url, media.date_utc, media.comments
+        #     if isinstance(media, instaloader.Post):
+        #         profilePic, caption, image, date, commentCount = media.owner_profile.profile_pic_url, media.caption if media.caption else "<No Caption Provided>", media.url, media.date_utc, media.comments
                 
-                reply.set_thumbnail(url=profilePic)
-                reply.description = f"[{SP_USERNAME}](https://www.instagram.com/{SP_USERNAME}/) posted a new photo:\n\n{caption}"
-                reply.set_image(url=image)
-                reply.set_footer(text=f"{commentCount} Comment(s) · Posted on {dates.formatSimpleDate(timestamp=date)} UTC")
-            elif isinstance(media, instaloader.StoryItem):
-                profilePic, caption, image, date, expiry = media.owner_profile.profile_pic_url, media.caption if media.caption else "<No Caption Provided>", media.url, media.date_utc, media.expiring_utc
+        #         reply.set_thumbnail(url=profilePic)
+        #         reply.description = f"[{SP_USERNAME}](https://www.instagram.com/{SP_USERNAME}/) posted a new photo:\n\n{caption}"
+        #         reply.set_image(url=image)
+        #         reply.set_footer(text=f"{commentCount} Comment(s) · Posted on {dates.formatSimpleDate(timestamp=date)} UTC")
+        #     elif isinstance(media, instaloader.StoryItem):
+        #         profilePic, caption, image, date, expiry = media.owner_profile.profile_pic_url, media.caption if media.caption else "<No Caption Provided>", media.url, media.date_utc, media.expiring_utc
 
-                expiryDelta = dates.deltaInSeconds(expiry, againstTimeNow=True, utc=True)
+        #         expiryDelta = dates.deltaInSeconds(expiry, againstTimeNow=True, utc=True)
 
-                formattedExpiry = dates.formatSeconds(expiryDelta)
+        #         formattedExpiry = dates.formatSeconds(expiryDelta)
                 
-                reply.set_thumbnail(url=profilePic)
-                reply.description = f"[{SP_USERNAME}](https://www.instagram.com/{SP_USERNAME}/) posted a new story:\n\n{caption}"
-                reply.set_image(url=image)
-                reply.set_footer(text=f"Story Expires In {formattedExpiry} · Posted on {dates.formatSimpleDate(timestamp=date)} UTC")
+        #         reply.set_thumbnail(url=profilePic)
+        #         reply.description = f"[{SP_USERNAME}](https://www.instagram.com/{SP_USERNAME}/) posted a new story:\n\n{caption}"
+        #         reply.set_image(url=image)
+        #         reply.set_footer(text=f"Story Expires In {formattedExpiry} · Posted on {dates.formatSimpleDate(timestamp=date)} UTC")
 
-            await ctx.followup.send(embed=reply)
-        except instaloader.ProfileNotExistsException:
-            reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"The user {SP_USERNAME} doesn't exist.")
+        #     await ctx.followup.send(embed=reply)
+        # except instaloader.ProfileNotExistsException:
+        #     reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"The user {SP_USERNAME} doesn't exist.")
 
-            await ctx.followup.send(embed=reply)
-        except Exception as e:
-            reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: {e}.")
+        #     await ctx.followup.send(embed=reply)
+        # except Exception as e:
+        #     reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: {e}.")
 
-            await ctx.followup.send(embed=reply)
+        #     await ctx.followup.send(embed=reply)
+        
+        reply = EmbedReply("Media - Instagram - Error", "socialmedia", True, description=f"Error: Instagram is allergic to fun and banned the BenBot account for botting--ironically, they discontinuied the only official way to get a users latest Instagram post. Shame on Meta.\n\nThis command is deprecated.")
+
+        await reply.send(ctx)
 
 def setup(bot):
     currentFile = sys.modules[__name__]
