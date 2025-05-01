@@ -31,13 +31,20 @@ ACCEPTED_FILE_TYPES = {
     "Gemini": {
         "Documents": [
             "application/pdf",
+            "application/pdf; charset=utf-8",
             "text/plain",
             "text/plain; charset=utf-8",
+            "text/html; charset=utf-8",
             "text/html",
             "text/css",
+            "text/css; charset=utf-8",
             "text/md",
+            "text/md; charset=utf-8",
+            "text/csv; charset=utf-8",
             "text/csv",
+            "text/xml; charset=utf-8",
             "text/xml",
+            "text/rtf; charset=utf-8"
             "text/rtf"
         ],
         "Scripts": [

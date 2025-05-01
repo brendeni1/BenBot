@@ -31,7 +31,7 @@ class Instagram(commands.Cog):
 
         self.instaAPI = instaloader.Instaloader(max_connection_attempts=3)
         
-        self.instaAPI.load_session_from_file(INSTA_USERNAME)
+        # self.instaAPI.load_session_from_file(INSTA_USERNAME)
     
     instaGroup = discord.SlashCommandGroup("instagram", "A collection of commands for fetching social media posts/stories.", guild_ids=[799341195109203998])
 
