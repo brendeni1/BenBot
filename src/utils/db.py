@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import pickle
 
 def jsonDB(path: str) -> dict:
     if ".json" not in path:
@@ -33,3 +34,9 @@ def listDBs(path: str = "src/data", withFileExtensions: bool = False, filterByEx
         cleanDatabases.append(replaced)
     
     return cleanDatabases
+
+def serializeObj(obj) -> bytes:
+    return pickle.dumps(obj)
+
+def deserializeObj(byteObj: bytes):
+    return pickle.loads(byteObj)

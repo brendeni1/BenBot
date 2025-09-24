@@ -57,7 +57,7 @@ def formatSimpleDate(timestamp: str | datetime.datetime = None, *, includeTime: 
     
     return formattedDate
 
-def simpleDateObj(timestamp: None | datetime.datetime | str = None, *, timeNow: bool = False) -> str:
+def simpleDateObj(timestamp: None | datetime.datetime | str = None, *, timeNow: bool = False) -> datetime.datetime:
     if not timestamp and not timeNow:
         raise ValueError("No timestamp provided to src.utils.dates.simpleDateObj.")
     
