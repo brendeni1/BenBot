@@ -9,6 +9,8 @@ from spotipy.oauth2 import SpotifyClientCredentials
 from src.utils import dates
 from src.utils import images
 
+from src.classes import EmbedReply
+
 from src import constants
 
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
@@ -37,8 +39,9 @@ class Track:
         trackNumber: int,
         durationMS: int,
         rating: float = None,
-        ratingOutOf: int | float = constants.RATINGS_OUT_OF,
-        favourite: bool = False
+        favourite: bool = False,
+        comments: str = None,
+        album: "Album" = None
     ):
         self.spotifyID = spotifyID
         self.name = name
@@ -48,8 +51,9 @@ class Track:
         self.trackNumber = trackNumber
         self.durationMS = durationMS
         self.rating = rating
-        self.ratingOutOf = ratingOutOf
         self.favourite = favourite
+        self.comments = comments
+        self.album = album
 
     def setRating(self, rating: float) -> None:
         self.rating = rating
@@ -62,17 +66,23 @@ class Track:
         else:
             return self.artists
         
+    def setComments(self, comments: str | None):
+        self.comments = comments
+
+    def parseComments(self):
+        return "(No Comments)" if not self.comments else self.comments
+        
     def markFavourite(self, state: bool):
         self.favourite = state
 
     def getRating(self, formatted: bool = False, roundedTo: int = 2) -> float:
         if self.rating == None and formatted:
             return "Unrated"
-        elif (self.rating >= 0) and (self.rating <= self.ratingOutOf):
+        elif (self.rating >= 0) and (self.rating <= self.album.ratingOutOf):
             if formatted and roundedTo != None:
-                return f"{round(self.rating, abs(roundedTo))}/{self.ratingOutOf}"
+                return f"{round(self.rating, abs(roundedTo))}/{self.album.ratingOutOf}"
             elif formatted and roundedTo == None:
-                return f"{self.rating}/{self.ratingOutOf}"
+                return f"{self.rating}/{self.album.ratingOutOf}"
             elif not formatted and roundedTo != None:
                 return round(self.rating, abs(roundedTo))
             else:
@@ -81,6 +91,27 @@ class Track:
             return "Skipped"
         else:
             return self.rating
+    
+    async def rateTrack(self, ctx: discord.ApplicationContext):
+        rateTrackEmbed = TrackRatingEmbedReply(
+            self
+        )
+
+        return await rateTrackEmbed.send(ctx, ephemeral=True)
+
+class TrackRatingEmbedReply(EmbedReply):
+    def __init__(self, track: Track):
+        formattedArtists: str = track.getArtists(True)
+        
+        title = f"♦️ {track.trackNumber}/{track.album.totalTracks()} 👤 {formattedArtists} ⏯️ {track.name} 🔗↗️"
+        super().__init__(title, "albumratings", url=track.album.link, description="Assign a rating to, favourite, or skip rating the song using the buttons/box below.")
+
+        self.set_thumbnail(url=track.album.coverImage)
+        self.colour = track.album.coverImageColour
+        self.set_footer(text=f"Song data provided by Spotify®. Rating ID: {track.album.ratingID}", icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png")
+
+        self.add_field(name="***Previous Rating***", value=f"`{track.getRating(True)}`", inline=True)
+        self.add_field(name="***Comments***", value=track.parseComments(), inline=True)
 
 class Album:
     def __init__(
@@ -148,6 +179,8 @@ class Album:
         return serialized
     
     def addTrack(self, track: Track):
+        track.album = self
+
         self.tracks.append(track)
 
     def getArtists(self, formatted: bool = False) -> Artist | str:
@@ -156,11 +189,45 @@ class Album:
         else:
             return self.artists
     
-    def setComments(self, comments: str):
+    def setComments(self, comments: str | None):
         self.comments = comments
     
     def parseComments(self):
         return "(No Comments)" if not self.comments else self.comments
+    
+    def releaseYear(self, formatted: bool = False, includeMonth: bool = False) -> int | str | None:
+        if not self.releaseDate and formatted:
+            return "N/D"
+        elif not self.releaseDate and not formatted:
+            return None
+        elif self.releaseDate:
+            if includeMonth:
+                return f"{self.releaseDate.strftime("%B")}, {self.releaseDate.year}"
+            else:
+                return self.releaseDate.year
+        else:
+            raise Exception(f"releaseYear: Invalid release year! Rating ID: {self.ratingID}")
+
+class AlbumRatingEmbedReply(EmbedReply):
+    def __init__(self, album: Album):
+        formattedArtists: str = album.getArtists(True)
+
+        title = f"👤 {formattedArtists} 💿 {album.name} 📅 {album.releaseYear(True, True)} 🔗↗️"
+        super().__init__(title, "albumratings", url=album.link, description="")
+
+        self.set_thumbnail(url=album.coverImage)
+        self.colour = album.coverImageColour
+        self.set_footer(text=f"Album data provided by Spotify®. Rating ID: {album.ratingID}", icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png")
+
+        for track in album.tracks:
+            self.description += f"**{track.trackNumber}.** {track.name} · `{track.getRating(True)}`\n"
+
+
+        self.add_field(name="***Overall Rating***", value=album.meanRating(True), inline=True)
+        self.add_field(name="***Rating By***", value=f"<@{album.createdBy}>", inline=True)
+        self.add_field(name="***Rated On***", value=f"{dates.formatSimpleDate(album.createdAt)}", inline=True)
+
+        self.add_field(name="***Comments***", value=album.parseComments(), inline=False)
 
 def searchForAlbumName(query: str, limit=5, type="album") -> list:
     if not query:
@@ -187,24 +254,6 @@ def parseAlbumDetails(data: dict, createdBy: int, createdAt: datetime = None, co
     artists = [Artist(artist["id"], artist["name"], artist["external_urls"]["spotify"]) for artist in data["artists"]]
     link = data["external_urls"]["spotify"]
     releaseDate = dates.simpleDateObj(data["release_date"])
-    
-    tracks = []
-
-    for trackData in data["tracks"]["items"]:
-        trackArtists = [Artist(artist["id"], artist["name"], artist["external_urls"]["spotify"]) for artist in trackData["artists"]]
-
-        track = Track(
-            trackData["id"],
-            trackData["name"],
-            trackArtists,
-            trackData["explicit"],
-            trackData["external_urls"]["spotify"],
-            trackData["track_number"],
-            trackData["duration_ms"],
-            ratingOutOf=ratingOutOf,
-        )
-    
-        tracks.append(track)
 
     coverImage = None if not data["images"] else data["images"][0]["url"]
 
@@ -221,12 +270,26 @@ def parseAlbumDetails(data: dict, createdBy: int, createdAt: datetime = None, co
         releaseDate,
         createdBy,
         createdAt if createdAt else dates.simpleDateObj(timeNow=True),
-        tracks=tracks,
         ratingOutOf=ratingOutOf,
         coverImage=coverImage,
         coverImageColour=coverImageColour,
         comments=comments
     )
+
+    for trackData in data["tracks"]["items"]:
+        trackArtists = [Artist(artist["id"], artist["name"], artist["external_urls"]["spotify"]) for artist in trackData["artists"]]
+
+        track = Track(
+            trackData["id"],
+            trackData["name"],
+            trackArtists,
+            trackData["explicit"],
+            trackData["external_urls"]["spotify"],
+            trackData["track_number"],
+            trackData["duration_ms"]
+        )
+        
+        album.addTrack(track)
 
     return album
 

@@ -2,6 +2,7 @@ import discord
 import sqlite3
 
 from src.utils.db import *
+from src.utils import text
             
 class SelectGuildMember(discord.ui.Select):
     def __init__(self, members: list[discord.Member], placeholderTitle: str, noMemberOption: bool):
@@ -38,7 +39,7 @@ class SelectGuildMemberView(discord.ui.View):
 class EmbedReply(discord.Embed):
     def __init__(self, title: str, commandName: str, error: bool = False, *, url: str = None, description: str = None):
         colour = 0xff0000 if error else 0xdfb690
-        super().__init__(colour=colour, title=title if not error else "Error" if not title else title, url=url if url else f"https://github.com/brendeni1/BenBot/blob/main/src/cogs/{commandName.lower()}.py", description=description)
+        super().__init__(colour=colour, title=text.truncateString(title, 255)[0] if not error else "Error" if not title else title, url=url if url else f"https://github.com/brendeni1/BenBot/blob/main/src/cogs/{commandName.lower()}.py", description=text.truncateString(description, 4096)[0])
         super().set_author(name="BenBot", url="https://github.com/brendeni1/BenBot", icon_url="https://cdn.discordapp.com/emojis/1337974783396286575.webp?size=96")
         self.error = error
 

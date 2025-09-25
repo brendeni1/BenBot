@@ -128,27 +128,13 @@ class AlbumRatings(commands.Cog):
 
             parsedAlbumDetails: music.Album = music.parseAlbumDetails(albumDetailsFromID, ctx.user.id)
 
-            reply = EmbedReply(
-                f"Album Rating - {parsedAlbumDetails.name} 🔗",
-                "albumratings",
-                url=parsedAlbumDetails.link,
-                description="\n\n"
+            albumLayoutReplyEmbed = music.AlbumRatingEmbedReply(
+                parsedAlbumDetails
             )
-            
-            if parsedAlbumDetails.coverImage:
-                reply.set_thumbnail(url=parsedAlbumDetails.coverImage)
 
-                reply.colour = parsedAlbumDetails.coverImageColour
+            albumLayoutReply = await albumLayoutReplyEmbed.send(ctx, ephemeral=True)
 
-            for track in parsedAlbumDetails.tracks:
-                reply.description += f"**{track.trackNumber}.** {track.name} · `{track.getRating(True)}`\n"
-
-            reply.add_field(name="***Overall Rating***", value=parsedAlbumDetails.meanRating(True), inline=True)
-            reply.add_field(name="***Comments***", value=parsedAlbumDetails.parseComments(), inline=True)
-
-            reply.set_footer(text=f"Album data provided by Spotify®. · Rating ID: {parsedAlbumDetails.ratingID}", icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png")
-
-            await reply.send(ctx)
+            songRatingReply = await parsedAlbumDetails.tracks[0].rateTrack(ctx)
             
         except Exception as e:
             raise e
