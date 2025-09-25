@@ -1,0 +1,1 @@
+RATINGS_OUT_OF = 10

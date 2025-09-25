@@ -11,3 +11,6 @@ def truncateString(string: str, maxLength: int, addElipsis: bool = True, splitOn
         truncatedString = [string]
     
     return truncatedString
+
+def rgb_to_hex(rgb):
+    return "#{:02x}{:02x}{:02x}".format(int(rgb[0]), int(rgb[1]), int(rgb[2]))

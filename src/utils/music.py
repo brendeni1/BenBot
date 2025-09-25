@@ -1,3 +1,4 @@
+import discord
 import os
 from datetime import datetime
 from uuid import uuid4
@@ -6,6 +7,9 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
 from src.utils import dates
+from src.utils import images
+
+from src import constants
 
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
@@ -32,7 +36,9 @@ class Track:
         link: str,
         trackNumber: int,
         durationMS: int,
-        rating: float = None
+        rating: float = None,
+        ratingOutOf: int | float = constants.RATINGS_OUT_OF,
+        favourite: bool = False
     ):
         self.spotifyID = spotifyID
         self.name = name
@@ -42,6 +48,8 @@ class Track:
         self.trackNumber = trackNumber
         self.durationMS = durationMS
         self.rating = rating
+        self.ratingOutOf = ratingOutOf
+        self.favourite = favourite
 
     def setRating(self, rating: float) -> None:
         self.rating = rating
@@ -53,6 +61,26 @@ class Track:
             return ", ".join([artist.name for artist in self.artists])
         else:
             return self.artists
+        
+    def markFavourite(self, state: bool):
+        self.favourite = state
+
+    def getRating(self, formatted: bool = False, roundedTo: int = 2) -> float:
+        if self.rating == None and formatted:
+            return "Unrated"
+        elif (self.rating >= 0) and (self.rating <= self.ratingOutOf):
+            if formatted and roundedTo != None:
+                return f"{round(self.rating, abs(roundedTo))}/{self.ratingOutOf}"
+            elif formatted and roundedTo == None:
+                return f"{self.rating}/{self.ratingOutOf}"
+            elif not formatted and roundedTo != None:
+                return round(self.rating, abs(roundedTo))
+            else:
+                return self.rating
+        elif self.rating == -1 and formatted:
+            return "Skipped"
+        else:
+            return self.rating
 
 class Album:
     def __init__(
@@ -66,9 +94,12 @@ class Album:
         createdAt: datetime = dates.simpleDateObj(timeNow=True),
         editedAt: datetime = None,
         tracks: list[Track] = [],
-        coverImage: str = None
+        ratingOutOf: int | float = constants.RATINGS_OUT_OF,
+        coverImage: str = None,
+        coverImageColour: str = None,
+        comments: str = None
     ):
-        self.ratingID = uuid4(),
+        self.ratingID = uuid4().hex
         self.spotifyID = spotifyID
         self.name = name
         self.artists = artists
@@ -78,26 +109,36 @@ class Album:
         self.createdAt = createdAt
         self.editedAt = editedAt
         self.tracks = tracks
+        self.ratingOutOf = ratingOutOf
         self.coverImage = coverImage
+        self.coverImageColour = coverImageColour
+        self.comments = comments
 
     def totalTracks(self) -> int:
         return len(self.tracks)
 
-    def meanRating(self) -> float:
+    def meanRating(self, formatted: bool = False) -> float:
         if not self.tracks:
             raise Exception("There are no tracks assigned to the album so there is no average rating!")
         
         cleanedRatingList: list[float] = []
 
         for track in self.tracks:
-            if (track.rating >= 0) and (track.rating <= 10):
+            if track.rating == None and formatted:
+                return "Unfinished"
+            elif track.rating == None and not formatted:
+                raise ValueError("There is an unrated song in the album rating and an average could not be calculated! Please finish the rating.")
+            elif (track.rating >= 0) and (track.rating <= constants.RATINGS_OUT_OF):
                 cleanedRatingList.append(track.rating)
             elif track.rating == -1:
                 continue
-            elif track.rating == None:
-                raise ValueError("There is an unrated song in the album rating and an average could not be calculated! Please finish the rating.")
+            else:
+                raise Exception(f"Shits broken! Rating condition unaccounted for: {track.rating} on rating {self.ratingID}.")
         
         mean = round(sum(cleanedRatingList) / len(cleanedRatingList), 1)
+
+        if formatted:
+            return f"{mean}/{self.ratingOutOf}"
 
         return mean
     
@@ -114,6 +155,12 @@ class Album:
             return ", ".join([artist.name for artist in self.artists])
         else:
             return self.artists
+    
+    def setComments(self, comments: str):
+        self.comments = comments
+    
+    def parseComments(self):
+        return "(No Comments)" if not self.comments else self.comments
 
 def searchForAlbumName(query: str, limit=5, type="album") -> list:
     if not query:
@@ -131,7 +178,7 @@ def fetchAlbumDetailsByID(albumID: str) -> dict:
 
     return albumResults
 
-def parseAlbumDetails(data: dict, createdBy: int, createdAt: datetime = None) -> Album:
+def parseAlbumDetails(data: dict, createdBy: int, createdAt: datetime = None, comments: str = None, ratingOutOf = constants.RATINGS_OUT_OF) -> Album:
     if not data:
         raise ValueError("No data provided to album parser.")
     
@@ -154,11 +201,17 @@ def parseAlbumDetails(data: dict, createdBy: int, createdAt: datetime = None) ->
             trackData["external_urls"]["spotify"],
             trackData["track_number"],
             trackData["duration_ms"],
+            ratingOutOf=ratingOutOf,
         )
     
         tracks.append(track)
 
     coverImage = None if not data["images"] else data["images"][0]["url"]
+
+    coverImageColour = None
+
+    if coverImage:
+        coverImageColour = discord.Colour.from_rgb(*(int(i) for i in images.extractColours(coverImage)[0]))
 
     album = Album(
         spotifyID,
@@ -169,7 +222,10 @@ def parseAlbumDetails(data: dict, createdBy: int, createdAt: datetime = None) ->
         createdBy,
         createdAt if createdAt else dates.simpleDateObj(timeNow=True),
         tracks=tracks,
-        coverImage=coverImage
+        ratingOutOf=ratingOutOf,
+        coverImage=coverImage,
+        coverImageColour=coverImageColour,
+        comments=comments
     )
 
     return album
