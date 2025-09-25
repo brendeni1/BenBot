@@ -23,7 +23,29 @@ class CancelButton(discord.ui.Button):
     ISCOG = False
 
     def __init__(self):
-        super().__init__(label="Cancel", style=discord.ButtonStyle.red, emoji="🛑")
+        super().__init__(label="Cancel", style=discord.ButtonStyle.danger, emoji="🛑")
+
+    async def callback(self, ctx: discord.ApplicationContext):
+        self.view.disable_all_items()
+        self.view.stop()
+
+        reply = EmbedReply(
+            "Album Rating - Cancelled",
+            "albumratings",
+            True,
+            description="Album rating cancelled."
+        )
+        
+        await ctx.response.edit_message(view=self.view, embed=reply)
+
+
+class EditComments(discord.ui.Button):
+    ISCOG = False
+
+    def __init__(self, obj: music.Album | music.Track):
+        super().__init__(label="Edit Comment", style=discord.ButtonStyle.primary, emoji="💬")
+
+        self.obj = obj
 
     async def callback(self, ctx: discord.ApplicationContext):
         self.view.disable_all_items()
@@ -61,6 +83,14 @@ class ChooseAlbumView(discord.ui.View):
 
         if self.message:
             await self.message.edit(embed=reply, view=self)
+
+class AlbumLayoutInteractionsView(discord.ui.View):
+    ISCOG = False
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+        self.add_item(CancelButton())
 
 class AlbumRatings(commands.Cog):
     ISCOG = True

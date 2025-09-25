@@ -69,8 +69,11 @@ class Track:
     def setComments(self, comments: str | None):
         self.comments = comments
 
-    def parseComments(self):
-        return "(No Comments)" if not self.comments else self.comments
+    def parseComments(self, formatted: bool = False):
+        if formatted:
+            return "(No Comments)" if not self.comments else self.comments
+        else:
+            return self.comments
         
     def markFavourite(self, state: bool):
         self.favourite = state
@@ -111,7 +114,7 @@ class TrackRatingEmbedReply(EmbedReply):
         self.set_footer(text=f"Song data provided by Spotify®. Rating ID: {track.album.ratingID}", icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png")
 
         self.add_field(name="***Previous Rating***", value=f"`{track.getRating(True)}`", inline=True)
-        self.add_field(name="***Comments***", value=track.parseComments(), inline=True)
+        self.add_field(name="***Comments***", value=track.parseComments(True), inline=True)
 
 class Album:
     def __init__(
@@ -192,8 +195,11 @@ class Album:
     def setComments(self, comments: str | None):
         self.comments = comments
     
-    def parseComments(self):
-        return "(No Comments)" if not self.comments else self.comments
+    def parseComments(self, formatted: bool = False):
+        if formatted:
+            return "(No Comments)" if not self.comments else self.comments
+        else:
+            return self.comments
     
     def releaseYear(self, formatted: bool = False, includeMonth: bool = False) -> int | str | None:
         if not self.releaseDate and formatted:
@@ -227,7 +233,27 @@ class AlbumRatingEmbedReply(EmbedReply):
         self.add_field(name="***Rating By***", value=f"<@{album.createdBy}>", inline=True)
         self.add_field(name="***Rated On***", value=f"{dates.formatSimpleDate(album.createdAt)}", inline=True)
 
-        self.add_field(name="***Comments***", value=album.parseComments(), inline=False)
+        self.add_field(name="***Comments***", value=album.parseComments(True), inline=False)
+
+class EditCommentModal(discord.ui.Modal):
+    def __init__(self, obj: Album | Track, *args, **kwargs) -> None:
+        super().__init__(title=f"Comments · {obj.name}", *args, **kwargs)
+
+        self.obj = obj
+
+        self.add_item(
+            discord.ui.InputText(
+                label="Edit Comments",
+                max_length=1000,
+                value=obj.parseComments()
+            )
+        )
+    
+    async def callback(self, ctx: discord.Interaction):
+        if not self.children[0].value:
+            self.obj.setComments(None)
+        else:
+            self.obj.setComments(self.children[0].value)
 
 def searchForAlbumName(query: str, limit=5, type="album") -> list:
     if not query:
