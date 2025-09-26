@@ -8,6 +8,7 @@ from spotipy.oauth2 import SpotifyClientCredentials
 
 from src.utils import dates
 from src.utils import images
+from src.utils import text
 
 from src.classes import EmbedReply
 
@@ -15,6 +16,10 @@ from src import constants
 
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+
+# Timeouts in mins.
+TIMEOUT_TO_PICK_ALBUM = 1 * (60)
+TIMEOUT_FOR_RATING_SELECT = 300 * (60)
 
 spotifyClient = spotipy.Spotify(
     auth_manager=SpotifyClientCredentials(
@@ -28,6 +33,132 @@ class Artist:
         self.name = name
         self.link = link
 
+class CancelButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Cancel", style=discord.ButtonStyle.danger, emoji="⛔")
+
+    async def callback(self, ctx: discord.ApplicationContext):
+        self.view.disable_all_items()
+        self.view.cancelled = True
+        self.view.stop()
+
+        reply = EmbedReply(
+            "Album Rating - Cancelled",
+            "albumratings",
+            True,
+            description="Album rating cancelled."
+        )
+        
+        await ctx.response.edit_message(view=self.view, embed=reply)
+
+class SaveRatingButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Save Rating", style=discord.ButtonStyle.success, emoji="💾")
+
+    async def callback(self, ctx: discord.Interaction):
+        self.view.disable_all_items()
+        self.view.stop()
+
+        reply = EmbedReply(
+            "Album Rating - Saved",
+            "albumratings",
+            description="Album rating saved. ✅"
+        )
+
+        await ctx.response.edit_message(view=self.view, embed=reply)
+
+class NextTrackButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Next Track", style=discord.ButtonStyle.secondary, emoji="➡️")
+
+    async def callback(self, ctx: discord.Interaction):
+        view: SongRatingView = self.view
+        view.index += 1
+        if view.index >= len(view.album.tracks):
+            await view.finish()
+        else:
+            await view.showTrackAndRating(ctx)
+
+class PreviousTrackButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Previous Track", style=discord.ButtonStyle.secondary, emoji="⬅️")
+
+    async def callback(self, ctx: discord.Interaction):
+        view: SongRatingView = self.view
+        if view.index > 0:
+            view.index -= 1
+            await view.showTrackAndRating(ctx)
+
+class SongRatingView(discord.ui.View):
+    def __init__(self, album: "Album", startIndex: int = 0):
+        super().__init__(timeout=TIMEOUT_FOR_RATING_SELECT, disable_on_timeout=True)
+
+        self.album = album
+        self.index = startIndex
+        self.cancelled = False
+        self.message: discord.Message | None = None
+
+        self._updateItems()
+    
+    def _updateItems(self):
+        self.clear_items()
+
+        track = self.album.tracks[self.index]
+
+        self.add_item(SelectSongRating(track))
+        self.add_item(CancelButton())
+        if self.index > 0:
+            self.add_item(PreviousTrackButton())
+        if self.index < len(self.album.tracks) - 1:
+            self.add_item(NextTrackButton())
+        if self.index == len(self.album.tracks) - 1:
+            self.add_item(SaveRatingButton())
+
+    async def showTrackAndRating(self, ctx: discord.Interaction):
+        track = self.album.tracks[self.index]
+        
+        wholeAlbumEmbed = AlbumRatingEmbedReply(self.album)
+        songRatingEmbed = TrackRatingEmbedReply(track)
+        
+        self._updateItems()
+        
+        await ctx.response.edit_message(embeds=[wholeAlbumEmbed, songRatingEmbed], view=self)
+    
+    async def on_timeout(self):
+        self.disable_all_items()
+
+        reply = EmbedReply(
+            "Album Rating - Timed Out",
+            "albumratings",
+            True,
+            description=f"Album rating timed out after {round((TIMEOUT_FOR_RATING_SELECT/60)/60, 2)} hrs of inactivity. Please retry the rating."
+        )
+
+        if self.message:
+            await self.message.edit(embed=reply, view=self)
+
+class SelectSongRating(discord.ui.Select):
+    def __init__(self, track: "Track"):
+        self.track = track
+
+        scale = list(text.frange(0, track.album.ratingOutOf + constants.RATINGS_STEP, constants.RATINGS_STEP))
+
+        super().__init__(
+            placeholder=f"Rate Song ({scale[0]}-{scale[-1]})",
+            options=[
+                discord.SelectOption(
+                    label=f"{i}/{track.album.ratingOutOf}",
+                    default=track.getRating(roundedTo=None) == i,
+                    value=str(i),
+                )
+                for i in scale
+            ],
+        )
+
+    async def callback(self, ctx: discord.Interaction):
+        self.track.setRating(float(self.values[0]))
+
+        await ctx.response.defer()
 class Track:
     def __init__(
         self,
@@ -81,7 +212,7 @@ class Track:
     def getRating(self, formatted: bool = False, roundedTo: int = 2) -> float:
         if self.rating == None and formatted:
             return "Unrated"
-        elif (self.rating >= 0) and (self.rating <= self.album.ratingOutOf):
+        elif (self.rating != None) and (self.rating >= 0) and (self.rating <= self.album.ratingOutOf):
             if formatted and roundedTo != None:
                 return f"{round(self.rating, abs(roundedTo))}/{self.album.ratingOutOf}"
             elif formatted and roundedTo == None:
@@ -94,27 +225,26 @@ class Track:
             return "Skipped"
         else:
             return self.rating
-    
-    async def rateTrack(self, ctx: discord.ApplicationContext):
-        rateTrackEmbed = TrackRatingEmbedReply(
-            self
-        )
-
-        return await rateTrackEmbed.send(ctx, ephemeral=True)
 
 class TrackRatingEmbedReply(EmbedReply):
     def __init__(self, track: Track):
         formattedArtists: str = track.getArtists(True)
-        
-        title = f"♦️ {track.trackNumber}/{track.album.totalTracks()} 👤 {formattedArtists} ⏯️ {track.name} 🔗↗️"
-        super().__init__(title, "albumratings", url=track.album.link, description="Assign a rating to, favourite, or skip rating the song using the buttons/box below.")
+
+        title = f"({track.trackNumber}/{track.album.totalTracks()})  👤 {formattedArtists} ⏯️ {track.name} 🔗↗️"
+        super().__init__(title, "albumratings", url=track.album.link+"?=discordIsBroken=True", description="Assign rating/comment, or favourite/ignore the song using the buttons/box below.\n\nMove through the tracklist using the Next/Previous buttons.")
 
         self.set_thumbnail(url=track.album.coverImage)
         self.colour = track.album.coverImageColour
         self.set_footer(text=f"Song data provided by Spotify®. Rating ID: {track.album.ratingID}", icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png")
 
-        self.add_field(name="***Previous Rating***", value=f"`{track.getRating(True)}`", inline=True)
-        self.add_field(name="***Comments***", value=track.parseComments(True), inline=True)
+        self.add_field(
+            name="***Previous Song Rating***",
+            value=f"`{track.getRating(True)}`",
+            inline=True,
+        )
+        self.add_field(
+            name="***Song Comments***", value=track.parseComments(True), inline=True
+        )
 
 class Album:
     def __init__(
@@ -127,7 +257,7 @@ class Album:
         createdBy: int,
         createdAt: datetime = dates.simpleDateObj(timeNow=True),
         editedAt: datetime = None,
-        tracks: list[Track] = [],
+        tracks: list[Track] | None = None,
         ratingOutOf: int | float = constants.RATINGS_OUT_OF,
         coverImage: str = None,
         coverImageColour: str = None,
@@ -142,7 +272,7 @@ class Album:
         self.createdBy = createdBy
         self.createdAt = createdAt
         self.editedAt = editedAt
-        self.tracks = tracks
+        self.tracks = tracks if tracks is not None else []
         self.ratingOutOf = ratingOutOf
         self.coverImage = coverImage
         self.coverImageColour = coverImageColour
@@ -162,7 +292,7 @@ class Album:
                 return "Unfinished"
             elif track.rating == None and not formatted:
                 raise ValueError("There is an unrated song in the album rating and an average could not be calculated! Please finish the rating.")
-            elif (track.rating >= 0) and (track.rating <= constants.RATINGS_OUT_OF):
+            elif (track.rating >= 0) and (track.rating <= self.ratingOutOf):
                 cleanedRatingList.append(track.rating)
             elif track.rating == -1:
                 continue
@@ -229,11 +359,11 @@ class AlbumRatingEmbedReply(EmbedReply):
             self.description += f"**{track.trackNumber}.** {track.name} · `{track.getRating(True)}`\n"
 
 
-        self.add_field(name="***Overall Rating***", value=album.meanRating(True), inline=True)
-        self.add_field(name="***Rating By***", value=f"<@{album.createdBy}>", inline=True)
-        self.add_field(name="***Rated On***", value=f"{dates.formatSimpleDate(album.createdAt)}", inline=True)
+        self.add_field(name="***Overall Album Rating***", value=f"`{album.meanRating(True)}`", inline=True)
+        self.add_field(name="***Album Rating By***", value=f"<@{album.createdBy}>", inline=True)
+        self.add_field(name="***Album Rated On***", value=f"{dates.formatSimpleDate(album.createdAt)}", inline=True)
 
-        self.add_field(name="***Comments***", value=album.parseComments(True), inline=False)
+        self.add_field(name="***Album Comments***", value=album.parseComments(True), inline=False)
 
 class EditCommentModal(discord.ui.Modal):
     def __init__(self, obj: Album | Track, *args, **kwargs) -> None:
@@ -254,6 +384,51 @@ class EditCommentModal(discord.ui.Modal):
             self.obj.setComments(None)
         else:
             self.obj.setComments(self.children[0].value)
+
+class SelectAlbum(discord.ui.Select):
+    def __init__(self, choices: list[tuple]):
+        super().__init__(placeholder="Choose an album...", options=[discord.SelectOption(label=f"{choice[1]} · {choice[3]}", description=choice[2], emoji=text.numberToEmoji(choice[0] + 1), value=choice[4]) for choice in choices])
+
+    async def callback(self, ctx: discord.Interaction):
+        self.view.choice = self.values[0]
+
+        self.view.disable_all_items()
+        self.view.stop()
+        await ctx.response.edit_message(view=self.view)
+
+        await ctx.delete_original_response()
+
+class EditComments(discord.ui.Button):
+    def __init__(self, obj: Album | Track):
+        super().__init__(label="Edit Comment", style=discord.ButtonStyle.primary, emoji="💬")
+
+        self.obj = obj
+
+    async def callback(self, ctx: discord.ApplicationContext):
+        self.view.disable_all_items()
+        self.view.stop()
+
+class ChooseAlbumView(discord.ui.View):
+    def __init__(self, choices: list[tuple]):
+        super().__init__(timeout=TIMEOUT_TO_PICK_ALBUM, disable_on_timeout=True)
+
+        self.choice = None
+
+        self.add_item(SelectAlbum(choices))
+        self.add_item(CancelButton())
+
+    async def on_timeout(self):
+        self.disable_all_items()
+
+        reply = EmbedReply(
+            "Album Rating - Timed Out",
+            "albumratings",
+            True,
+            description="Album rating timed out. Please retry."
+        )
+
+        if self.message:
+            await self.message.edit(embed=reply, view=self)
 
 def searchForAlbumName(query: str, limit=5, type="album") -> list:
     if not query:
@@ -318,576 +493,3 @@ def parseAlbumDetails(data: dict, createdBy: int, createdAt: datetime = None, co
         album.addTrack(track)
 
     return album
-
-# SPOTIFY SEARCH BY ALBUM NAME RESPONSE
-
-# {
-#     "albums": {
-#         "href": "https://api.spotify.com/v1/search?offset=0&limit=1&query=Watch%20the%20Throme&type=album",
-#         "limit": 1,
-#         "next": "https://api.spotify.com/v1/search?offset=1&limit=1&query=Watch%20the%20Throme&type=album",
-#         "offset": 0,
-#         "previous": None,
-#         "total": 800,
-#         "items": [
-#             {
-#                 "album_type": "album",
-#                 "total_tracks": 12,
-#                 "external_urls": {
-#                     "spotify": "https://open.spotify.com/album/0OcMap99vLEeGkBCfCwRwS"
-#                 },
-#                 "href": "https://api.spotify.com/v1/albums/0OcMap99vLEeGkBCfCwRwS",
-#                 "id": "0OcMap99vLEeGkBCfCwRwS",
-#                 "images": [
-#                     {
-#                         "height": 640,
-#                         "url": "https://i.scdn.co/image/ab67616d0000b27352e61456aa4995ba48d94e30",
-#                         "width": 640,
-#                     },
-#                     {
-#                         "height": 300,
-#                         "url": "https://i.scdn.co/image/ab67616d00001e0252e61456aa4995ba48d94e30",
-#                         "width": 300,
-#                     },
-#                     {
-#                         "height": 64,
-#                         "url": "https://i.scdn.co/image/ab67616d0000485152e61456aa4995ba48d94e30",
-#                         "width": 64,
-#                     },
-#                 ],
-#                 "name": "Watch The Throne",
-#                 "release_date": "2011-08-08",
-#                 "release_date_precision": "day",
-#                 "type": "album",
-#                 "uri": "spotify:album:0OcMap99vLEeGkBCfCwRwS",
-#                 "artists": [
-#                     {
-#                         "external_urls": {
-#                             "spotify": "https://open.spotify.com/artist/3nFkdlSjzX9mRTtwJOzDYB"
-#                         },
-#                         "href": "https://api.spotify.com/v1/artists/3nFkdlSjzX9mRTtwJOzDYB",
-#                         "id": "3nFkdlSjzX9mRTtwJOzDYB",
-#                         "name": "JAY-Z",
-#                         "type": "artist",
-#                         "uri": "spotify:artist:3nFkdlSjzX9mRTtwJOzDYB",
-#                     },
-#                     {
-#                         "external_urls": {
-#                             "spotify": "https://open.spotify.com/artist/5K4W6rqBFWDnAN6FQUkS6x"
-#                         },
-#                         "href": "https://api.spotify.com/v1/artists/5K4W6rqBFWDnAN6FQUkS6x",
-#                         "id": "5K4W6rqBFWDnAN6FQUkS6x",
-#                         "name": "Kanye West",
-#                         "type": "artist",
-#                         "uri": "spotify:artist:5K4W6rqBFWDnAN6FQUkS6x",
-#                     },
-#                 ],
-#             }
-#         ],
-#     }
-# }
-
-
-# SPOTIFY DETAILS BY ALBUM ID RESPONSE
-
-# {
-#     "album_type": "album",
-#     "total_tracks": 12,
-#     "available_markets": [
-#         "AR",
-#         "AU",
-#         "AT",
-#         "BE",
-#         "BO",
-#         "BR",
-#         "BG",
-#         "CA",
-#         "CL",
-#         "CO",
-#         "CR",
-#         "CY",
-#         "CZ",
-#         "DK",
-#         "DO",
-#         "DE",
-#         "EC",
-#         "EE",
-#         "SV",
-#         "FI",
-#         "FR",
-#         "GR",
-#         "GT",
-#         "HN",
-#         "HK",
-#         "HU",
-#         "IS",
-#         "IE",
-#         "IT",
-#         "LV",
-#         "LT",
-#         "LU",
-#         "MY",
-#         "MT",
-#         "MX",
-#         "NL",
-#         "NZ",
-#         "NI",
-#         "NO",
-#         "PA",
-#         "PY",
-#         "PE",
-#         "PH",
-#         "PL",
-#         "PT",
-#         "SG",
-#         "SK",
-#         "ES",
-#         "SE",
-#         "CH",
-#         "TW",
-#         "TR",
-#         "UY",
-#         "US",
-#         "GB",
-#         "AD",
-#         "LI",
-#         "MC",
-#         "ID",
-#         "JP",
-#         "TH",
-#         "VN",
-#         "RO",
-#         "IL",
-#         "ZA",
-#         "SA",
-#         "AE",
-#         "BH",
-#         "QA",
-#         "OM",
-#         "KW",
-#         "EG",
-#         "MA",
-#         "DZ",
-#         "TN",
-#         "LB",
-#         "JO",
-#         "PS",
-#         "IN",
-#         "BY",
-#         "KZ",
-#         "MD",
-#         "UA",
-#         "AL",
-#         "BA",
-#         "HR",
-#         "ME",
-#         "MK",
-#         "RS",
-#         "SI",
-#         "KR",
-#         "BD",
-#         "PK",
-#         "LK",
-#         "GH",
-#         "KE",
-#         "NG",
-#         "TZ",
-#         "UG",
-#         "AG",
-#         "AM",
-#         "BS",
-#         "BB",
-#         "BZ",
-#         "BT",
-#         "BW",
-#         "BF",
-#         "CV",
-#         "CW",
-#         "DM",
-#         "FJ",
-#         "GM",
-#         "GE",
-#         "GD",
-#         "GW",
-#         "GY",
-#         "HT",
-#         "JM",
-#         "KI",
-#         "LS",
-#         "LR",
-#         "MW",
-#         "MV",
-#         "ML",
-#         "MH",
-#         "FM",
-#         "NA",
-#         "NR",
-#         "NE",
-#         "PW",
-#         "PG",
-#         "WS",
-#         "SM",
-#         "ST",
-#         "SN",
-#         "SC",
-#         "SL",
-#         "SB",
-#         "KN",
-#         "LC",
-#         "VC",
-#         "SR",
-#         "TL",
-#         "TO",
-#         "TT",
-#         "TV",
-#         "VU",
-#         "AZ",
-#         "BN",
-#         "BI",
-#         "KH",
-#         "CM",
-#         "TD",
-#         "KM",
-#         "GQ",
-#         "SZ",
-#         "GA",
-#         "GN",
-#         "KG",
-#         "LA",
-#         "MO",
-#         "MR",
-#         "MN",
-#         "NP",
-#         "RW",
-#         "TG",
-#         "UZ",
-#         "ZW",
-#         "BJ",
-#         "MG",
-#         "MU",
-#         "MZ",
-#         "AO",
-#         "CI",
-#         "DJ",
-#         "ZM",
-#         "CD",
-#         "CG",
-#         "IQ",
-#         "LY",
-#         "TJ",
-#         "VE",
-#         "ET",
-#         "XK",
-#     ],
-#     "external_urls": {
-#         "spotify": "https://open.spotify.com/album/0OcMap99vLEeGkBCfCwRwS"
-#     },
-#     "href": "https://api.spotify.com/v1/albums/0OcMap99vLEeGkBCfCwRwS",
-#     "id": "0OcMap99vLEeGkBCfCwRwS",
-#     "images": [
-#         {
-#             "url": "https://i.scdn.co/image/ab67616d0000b27352e61456aa4995ba48d94e30",
-#             "height": 640,
-#             "width": 640,
-#         },
-#         {
-#             "url": "https://i.scdn.co/image/ab67616d00001e0252e61456aa4995ba48d94e30",
-#             "height": 300,
-#             "width": 300,
-#         },
-#         {
-#             "url": "https://i.scdn.co/image/ab67616d0000485152e61456aa4995ba48d94e30",
-#             "height": 64,
-#             "width": 64,
-#         },
-#     ],
-#     "name": "Watch The Throne",
-#     "release_date": "2011-08-08",
-#     "release_date_precision": "day",
-#     "type": "album",
-#     "uri": "spotify:album:0OcMap99vLEeGkBCfCwRwS",
-#     "artists": [
-#         {
-#             "external_urls": {
-#                 "spotify": "https://open.spotify.com/artist/3nFkdlSjzX9mRTtwJOzDYB"
-#             },
-#             "href": "https://api.spotify.com/v1/artists/3nFkdlSjzX9mRTtwJOzDYB",
-#             "id": "3nFkdlSjzX9mRTtwJOzDYB",
-#             "name": "JAY-Z",
-#             "type": "artist",
-#             "uri": "spotify:artist:3nFkdlSjzX9mRTtwJOzDYB",
-#         },
-#         {
-#             "external_urls": {
-#                 "spotify": "https://open.spotify.com/artist/5K4W6rqBFWDnAN6FQUkS6x"
-#             },
-#             "href": "https://api.spotify.com/v1/artists/5K4W6rqBFWDnAN6FQUkS6x",
-#             "id": "5K4W6rqBFWDnAN6FQUkS6x",
-#             "name": "Kanye West",
-#             "type": "artist",
-#             "uri": "spotify:artist:5K4W6rqBFWDnAN6FQUkS6x",
-#         },
-#     ],
-#     "tracks": {
-#         "href": "https://api.spotify.com/v1/albums/0OcMap99vLEeGkBCfCwRwS/tracks?offset=0&limit=50",
-#         "limit": 50,
-#         "next": None,
-#         "offset": 0,
-#         "previous": None,
-#         "total": 12,
-#         "items": [
-#             {
-#                 "artists": [
-#                     {
-#                         "external_urls": {
-#                             "spotify": "https://open.spotify.com/artist/3nFkdlSjzX9mRTtwJOzDYB"
-#                         },
-#                         "href": "https://api.spotify.com/v1/artists/3nFkdlSjzX9mRTtwJOzDYB",
-#                         "id": "3nFkdlSjzX9mRTtwJOzDYB",
-#                         "name": "JAY-Z",
-#                         "type": "artist",
-#                         "uri": "spotify:artist:3nFkdlSjzX9mRTtwJOzDYB",
-#                     },
-#                     {
-#                         "external_urls": {
-#                             "spotify": "https://open.spotify.com/artist/5K4W6rqBFWDnAN6FQUkS6x"
-#                         },
-#                         "href": "https://api.spotify.com/v1/artists/5K4W6rqBFWDnAN6FQUkS6x",
-#                         "id": "5K4W6rqBFWDnAN6FQUkS6x",
-#                         "name": "Kanye West",
-#                         "type": "artist",
-#                         "uri": "spotify:artist:5K4W6rqBFWDnAN6FQUkS6x",
-#                     },
-#                     {
-#                         "external_urls": {
-#                             "spotify": "https://open.spotify.com/artist/2h93pZq0e7k5yf4dywlkpM"
-#                         },
-#                         "href": "https://api.spotify.com/v1/artists/2h93pZq0e7k5yf4dywlkpM",
-#                         "id": "2h93pZq0e7k5yf4dywlkpM",
-#                         "name": "Frank Ocean",
-#                         "type": "artist",
-#                         "uri": "spotify:artist:2h93pZq0e7k5yf4dywlkpM",
-#                     },
-#                     {
-#                         "external_urls": {
-#                             "spotify": "https://open.spotify.com/artist/1W3FSF1BLpY3hlVIgvenLz"
-#                         },
-#                         "href": "https://api.spotify.com/v1/artists/1W3FSF1BLpY3hlVIgvenLz",
-#                         "id": "1W3FSF1BLpY3hlVIgvenLz",
-#                         "name": "The-Dream",
-#                         "type": "artist",
-#                         "uri": "spotify:artist:1W3FSF1BLpY3hlVIgvenLz",
-#                     },
-#                 ],
-#                 "available_markets": [
-#                     "AR",
-#                     "AU",
-#                     "AT",
-#                     "BE",
-#                     "BO",
-#                     "BR",
-#                     "BG",
-#                     "CA",
-#                     "CL",
-#                     "CO",
-#                     "CR",
-#                     "CY",
-#                     "CZ",
-#                     "DK",
-#                     "DO",
-#                     "DE",
-#                     "EC",
-#                     "EE",
-#                     "SV",
-#                     "FI",
-#                     "FR",
-#                     "GR",
-#                     "GT",
-#                     "HN",
-#                     "HK",
-#                     "HU",
-#                     "IS",
-#                     "IE",
-#                     "IT",
-#                     "LV",
-#                     "LT",
-#                     "LU",
-#                     "MY",
-#                     "MT",
-#                     "MX",
-#                     "NL",
-#                     "NZ",
-#                     "NI",
-#                     "NO",
-#                     "PA",
-#                     "PY",
-#                     "PE",
-#                     "PH",
-#                     "PL",
-#                     "PT",
-#                     "SG",
-#                     "SK",
-#                     "ES",
-#                     "SE",
-#                     "CH",
-#                     "TW",
-#                     "TR",
-#                     "UY",
-#                     "US",
-#                     "GB",
-#                     "AD",
-#                     "LI",
-#                     "MC",
-#                     "ID",
-#                     "JP",
-#                     "TH",
-#                     "VN",
-#                     "RO",
-#                     "IL",
-#                     "ZA",
-#                     "SA",
-#                     "AE",
-#                     "BH",
-#                     "QA",
-#                     "OM",
-#                     "KW",
-#                     "EG",
-#                     "MA",
-#                     "DZ",
-#                     "TN",
-#                     "LB",
-#                     "JO",
-#                     "PS",
-#                     "IN",
-#                     "BY",
-#                     "KZ",
-#                     "MD",
-#                     "UA",
-#                     "AL",
-#                     "BA",
-#                     "HR",
-#                     "ME",
-#                     "MK",
-#                     "RS",
-#                     "SI",
-#                     "KR",
-#                     "BD",
-#                     "PK",
-#                     "LK",
-#                     "GH",
-#                     "KE",
-#                     "NG",
-#                     "TZ",
-#                     "UG",
-#                     "AG",
-#                     "AM",
-#                     "BS",
-#                     "BB",
-#                     "BZ",
-#                     "BT",
-#                     "BW",
-#                     "BF",
-#                     "CV",
-#                     "CW",
-#                     "DM",
-#                     "FJ",
-#                     "GM",
-#                     "GE",
-#                     "GD",
-#                     "GW",
-#                     "GY",
-#                     "HT",
-#                     "JM",
-#                     "KI",
-#                     "LS",
-#                     "LR",
-#                     "MW",
-#                     "MV",
-#                     "ML",
-#                     "MH",
-#                     "FM",
-#                     "NA",
-#                     "NR",
-#                     "NE",
-#                     "PW",
-#                     "PG",
-#                     "WS",
-#                     "SM",
-#                     "ST",
-#                     "SN",
-#                     "SC",
-#                     "SL",
-#                     "SB",
-#                     "KN",
-#                     "LC",
-#                     "VC",
-#                     "SR",
-#                     "TL",
-#                     "TO",
-#                     "TT",
-#                     "TV",
-#                     "VU",
-#                     "AZ",
-#                     "BN",
-#                     "BI",
-#                     "KH",
-#                     "CM",
-#                     "TD",
-#                     "KM",
-#                     "GQ",
-#                     "SZ",
-#                     "GA",
-#                     "GN",
-#                     "KG",
-#                     "LA",
-#                     "MO",
-#                     "MR",
-#                     "MN",
-#                     "NP",
-#                     "RW",
-#                     "TG",
-#                     "UZ",
-#                     "ZW",
-#                     "BJ",
-#                     "MG",
-#                     "MU",
-#                     "MZ",
-#                     "AO",
-#                     "CI",
-#                     "DJ",
-#                     "ZM",
-#                     "CD",
-#                     "CG",
-#                     "IQ",
-#                     "LY",
-#                     "TJ",
-#                     "VE",
-#                     "ET",
-#                     "XK",
-#                 ],
-#                 "disc_number": 1,
-#                 "duration_ms": 272506,
-#                 "explicit": True,
-#                 "external_urls": {
-#                     "spotify": "https://open.spotify.com/track/7r6PigmGzlB3YPB7wvBBbi"
-#                 },
-#                 "href": "https://api.spotify.com/v1/tracks/7r6PigmGzlB3YPB7wvBBbi",
-#                 "id": "7r6PigmGzlB3YPB7wvBBbi",
-#                 "name": "No Church In The Wild",
-#                 "preview_url": None,
-#                 "track_number": 1,
-#                 "type": "track",
-#                 "uri": "spotify:track:7r6PigmGzlB3YPB7wvBBbi",
-#                 "is_local": False,
-#             }
-#         ],
-#     },
-#     "copyrights": [
-#         {"text": "© 2011 Roc-A-Fella Records, LLC/Shawn Carter", "type": "C"},
-#         {"text": "℗ 2011 Roc-A-Fella Records, LLC/Shawn Carter", "type": "P"},
-#     ],
-#     "external_ids": {"upc": "00602527809076"},
-#     "genres": [],
-#     "label": "Roc Nation/RocAFella/IDJ",
-#     "popularity": 74,
-# }

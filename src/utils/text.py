@@ -1,3 +1,5 @@
+from src import constants
+
 def truncateString(string: str, maxLength: int, addElipsis: bool = True, splitOnMax = False) -> list[str]:
     if maxLength < 4 and addElipsis:
         raise ValueError("Cannot add an elipsis with a maxLength less than 4 chars.")
@@ -12,5 +14,37 @@ def truncateString(string: str, maxLength: int, addElipsis: bool = True, splitOn
     
     return truncatedString
 
+def numberToEmoji(number: int, emojiMap: dict[str] = constants.EMOJI_MAP) -> str:
+    finished = ""
+    
+    for number in str(number):    
+        finished += emojiMap[number]
+
+    return finished
+
 def rgb_to_hex(rgb):
     return "#{:02x}{:02x}{:02x}".format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+
+def frange(start, stop=None, step=1.0):
+    """
+    A float-friendly version of range().
+    
+    Examples:
+        list(frange(0, 5, 0.5))  # [0.0, 0.5, 1.0, 1.5, ..., 4.5]
+        list(frange(3))          # [0.0, 1.0, 2.0]
+    """
+    if stop is None:  # only one arg -> frange(stop)
+        stop = start
+        start = 0.0
+
+    x = start
+    if step > 0:
+        while x < stop:
+            yield round(x, 10)  # round avoids floating-point drift
+            x += step
+    elif step < 0:
+        while x > stop:
+            yield round(x, 10)
+            x += step
+    else:
+        raise ValueError("frange() step argument must not be zero")

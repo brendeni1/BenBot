@@ -6,92 +6,6 @@ from src.classes import *
 from src.utils import music
 from src.utils import dates
 
-class SelectAlbum(discord.ui.Select):
-    ISCOG = False
-
-    def __init__(self, choices: list[tuple]):
-        super().__init__(placeholder="Choose an album...", options=[discord.SelectOption(label=choice[1], value=str(choice[0])) for choice in choices])
-
-    async def callback(self, ctx: discord.Interaction):
-        self.view.choice = self.values[0]
-
-        self.view.disable_all_items()
-        self.view.stop()
-        await ctx.response.edit_message(view=self.view)
-
-class CancelButton(discord.ui.Button):
-    ISCOG = False
-
-    def __init__(self):
-        super().__init__(label="Cancel", style=discord.ButtonStyle.danger, emoji="🛑")
-
-    async def callback(self, ctx: discord.ApplicationContext):
-        self.view.disable_all_items()
-        self.view.stop()
-
-        reply = EmbedReply(
-            "Album Rating - Cancelled",
-            "albumratings",
-            True,
-            description="Album rating cancelled."
-        )
-        
-        await ctx.response.edit_message(view=self.view, embed=reply)
-
-
-class EditComments(discord.ui.Button):
-    ISCOG = False
-
-    def __init__(self, obj: music.Album | music.Track):
-        super().__init__(label="Edit Comment", style=discord.ButtonStyle.primary, emoji="💬")
-
-        self.obj = obj
-
-    async def callback(self, ctx: discord.ApplicationContext):
-        self.view.disable_all_items()
-        self.view.stop()
-
-        reply = EmbedReply(
-            "Album Rating - Cancelled",
-            "albumratings",
-            True,
-            description="Album rating cancelled."
-        )
-        
-        await ctx.response.edit_message(view=self.view, embed=reply)
-
-class ChooseAlbumView(discord.ui.View):
-    ISCOG = False
-
-    def __init__(self, choices: list[tuple]):
-        super().__init__(timeout=60, disable_on_timeout=True)
-
-        self.choice = None
-
-        self.add_item(SelectAlbum(choices))
-        self.add_item(CancelButton())
-
-    async def on_timeout(self):
-        self.disable_all_items()
-
-        reply = EmbedReply(
-            "Album Rating - Timed Out",
-            "albumratings",
-            True,
-            description="Album rating timed out. Please retry."
-        )
-
-        if self.message:
-            await self.message.edit(embed=reply, view=self)
-
-class AlbumLayoutInteractionsView(discord.ui.View):
-    ISCOG = False
-
-    def __init__(self):
-        super().__init__(timeout=None)
-
-        self.add_item(CancelButton())
-
 class AlbumRatings(commands.Cog):
     ISCOG = True
 
@@ -117,7 +31,7 @@ class AlbumRatings(commands.Cog):
 
             if not albumQueryResults["albums"]["items"]:
                 raise Exception("No albums were found with that name!")
-            
+
             reply = EmbedReply(
                 "Album Rating - Choose Album",
                 "albumratings",
@@ -125,47 +39,55 @@ class AlbumRatings(commands.Cog):
             )
 
             reply.set_footer(text="Album data provided by Spotify®.", icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png")
-            
+
             cleanedChoices = []
 
             for idx, album in enumerate(albumQueryResults["albums"]["items"]):
                 artists = ", ".join([artist["name"] for artist in album["artists"]])
 
                 releaseYear = (dates.simpleDateObj(album["release_date"])).year
-                
-                choice = f"{album['name']} - {artists} - {releaseYear}"
 
                 id = album["id"]
 
-                cleanedChoices.append((idx, choice, id))
+                cleanedChoices.append((idx, album['name'], artists, releaseYear, id))
                 reply.add_field(name=f"{idx + 1}. {album['name']} · {releaseYear}", value=artists, inline=False)
 
-            view = ChooseAlbumView(cleanedChoices)
+            view = music.ChooseAlbumView(cleanedChoices)
 
             msg = await ctx.respond(embed=reply, view=view, ephemeral=True)
             view.message = await msg.original_response()
-            
+
             await view.wait()
 
             if view.choice == None:
                 return
 
-            choiceIdx = int(view.choice)
-
-            choiceID = cleanedChoices[choiceIdx][2]
-
-            albumDetailsFromID = music.fetchAlbumDetailsByID(choiceID)
+            albumDetailsFromID = music.fetchAlbumDetailsByID(view.choice)
 
             parsedAlbumDetails: music.Album = music.parseAlbumDetails(albumDetailsFromID, ctx.user.id)
 
-            albumLayoutReplyEmbed = music.AlbumRatingEmbedReply(
-                parsedAlbumDetails
+            # start at first track
+            firstTrack = parsedAlbumDetails.tracks[0]
+
+            view = music.SongRatingView(parsedAlbumDetails)
+
+            wholeAlbumEmbed = music.AlbumRatingEmbedReply(parsedAlbumDetails)
+            songRatingEmbed = music.TrackRatingEmbedReply(firstTrack)
+
+            view.message = await ctx.respond(
+                embeds=[wholeAlbumEmbed, songRatingEmbed], view=view, ephemeral=True
             )
 
-            albumLayoutReply = await albumLayoutReplyEmbed.send(ctx, ephemeral=True)
+            timedOut = await view.wait()
 
-            songRatingReply = await parsedAlbumDetails.tracks[0].rateTrack(ctx)
-            
+            if timedOut or view.cancelled:
+                view.disable_all_items()
+
+                return
+
+            wholeAlbumEmbed = music.AlbumRatingEmbedReply(parsedAlbumDetails)
+
+            await wholeAlbumEmbed.send(ctx, False)
         except Exception as e:
             raise e
             reply = EmbedReply(
