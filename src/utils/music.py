@@ -104,11 +104,7 @@ class SaveRatingButton(discord.ui.Button):
         self.view.disable_all_items()
         self.view.stop()
 
-        reply = EmbedReply(
-            "Album Rating - Saved", "albumratings", description="Album rating saved. ✅"
-        )
-
-        await ctx.response.edit_message(view=None, embed=reply)
+        await ctx.response.defer()
 
 class NextTrackButton(discord.ui.Button):
     def __init__(self, **kwargs):
@@ -451,7 +447,7 @@ class Album:
         releaseDate: datetime,
         createdBy: discord.Member,
         createdAt: datetime = dates.simpleDateObj(timeNow=True),
-        editedAt: datetime = None,
+        editedAt: datetime | None = None,
         tracks: list[Track] | None = None,
         ratingOutOf: int | float = constants.RATINGS_OUT_OF,
         coverImage: str = None,
@@ -475,6 +471,13 @@ class Album:
 
     def totalTracks(self) -> int:
         return len(self.tracks)
+
+    def updateEditedTime(self) -> datetime:
+        timestamp = dates.simpleDateObj(timeNow=True)
+        
+        self.editedAt = timestamp
+
+        return timestamp
 
     def meanRating(self, formatted: bool = False) -> float:
         if not self.tracks:
@@ -507,10 +510,24 @@ class Album:
 
         return mean
 
-    def serializeRating(self) -> bytes:
-        serialized = pickle.dumps(self)
+    def packAlbumRating(self, lastRelatedMessage: discord.Message) -> tuple:
+        ratingID: str = self.ratingID
+        
+        createdBy: int = self.createdBy.id
+        
+        createdAt: str = dates.formatSimpleDate(self.createdAt)
+        editedAt: str | None = dates.formatSimpleDate(self.editedAt) if self.editedAt else None
 
-        return serialized
+        ratingArtist: str = self.getArtists(True)
+        ratingAlbum: str = self.name
+        formattedRating: str = self.meanRating(True)
+
+        lastRelatedMessage = lastRelatedMessage.id
+
+        self.createdBy = self.createdBy.id
+        serializedRating = pickle.dumps(self)
+
+        return (ratingID, createdBy, createdAt, editedAt, ratingArtist, ratingAlbum, formattedRating, lastRelatedMessage, serializedRating)
 
     def addTrack(self, track: Track):
         track.album = self
