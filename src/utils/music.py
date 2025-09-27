@@ -39,16 +39,24 @@ class Artist:
         self.name = name
         self.link = link
 
+class CancelConfirmView(discord.ui.View):
+    def __init__(self, ratingView: "SongRatingView", embeds: list[discord.Embed]):
+        self.ratingView = ratingView
+        self.embeds = embeds
 
-class CancelButton(discord.ui.Button):
-    def __init__(self, **kwargs):
-        super().__init__(label="Cancel Rating", style=discord.ButtonStyle.danger, emoji="⛔", **kwargs)
+        super().__init__(timeout=30)
 
-    async def callback(self, ctx: discord.ApplicationContext):
-        self.view.disable_all_items()
-        self.view.cancelled = True
-        self.view.stop()
+    @discord.ui.button(label="Go Back", style=discord.ButtonStyle.secondary, emoji="⬅️")
+    async def deny(self, button: discord.ui.Button, ctx: discord.Interaction):
+        await ctx.response.edit_message(
+            embeds=self.embeds,
+            view=self.ratingView
+        )
+        
+        self.stop()
 
+    @discord.ui.button(label="Cancel Rating", style=discord.ButtonStyle.danger, emoji="⛔")
+    async def confirm(self, button: discord.ui.Button, ctx: discord.Interaction):
         reply = EmbedReply(
             "Album Rating - Cancelled",
             "albumratings",
@@ -56,7 +64,31 @@ class CancelButton(discord.ui.Button):
             description="Album rating cancelled.",
         )
 
-        await ctx.response.edit_message(view=self.view, embed=reply)
+        await ctx.response.edit_message(
+            embed=reply,
+            view=None
+        )
+
+        self.ratingView.cancelled = True
+
+        self.disable_all_items()
+        self.stop()
+
+class CancelButton(discord.ui.Button):
+    def __init__(self, **kwargs):
+        super().__init__(label="Cancel Rating", style=discord.ButtonStyle.danger, emoji="⛔", **kwargs)
+
+    async def callback(self, ctx: discord.ApplicationContext):
+        cancelEmbed = EmbedReply(
+            "Album Rating - Confirm Cancel",
+            "albumratings",
+            description="Are you sure you want to cancel the album rating?"
+        )
+
+        await ctx.response.edit_message(
+            embed=cancelEmbed,
+            view=CancelConfirmView(self.view, ctx.message.embeds)
+        )
 
 
 class SaveRatingButton(discord.ui.Button):
@@ -73,7 +105,7 @@ class SaveRatingButton(discord.ui.Button):
             "Album Rating - Saved", "albumratings", description="Album rating saved. ✅"
         )
 
-        await ctx.response.edit_message(view=self.view, embed=reply)
+        await ctx.response.edit_message(view=None, embed=reply)
 
 class NextTrackButton(discord.ui.Button):
     def __init__(self, **kwargs):
@@ -116,7 +148,7 @@ class SongRatingView(discord.ui.View):
     def _updateItems(self):
         self.clear_items()
 
-        track = self.album.tracks[self.index]
+        track: Track = self.album.tracks[self.index]
         trackAmount = len(self.album.tracks)
 
         isFirstSong: bool = self.index > 0
@@ -128,23 +160,42 @@ class SongRatingView(discord.ui.View):
             currentFavouriteIndex = track.getFavouriteIndex()
 
             for indexOption in FAVOURITE_INDEX_OPTIONS:
-                if (currentFavouriteIndex == indexOption) or (trackAmount < indexOption):
-                    self.add_item(FavouriteButton(indexOption, track, row=1, disabled=True))
+                self.add_item(
+                    FavouriteButton(
+                        indexOption,
+                        track,
+                        row=1,
+                        disabled=(currentFavouriteIndex == indexOption)
+                        or (trackAmount < indexOption)
+                        or track.getRating() == -1
+                    )
+                )
 
-                    continue
-
-                self.add_item(FavouriteButton(indexOption, track, row=1))
-            
             hasRating: bool = currentFavouriteIndex in FAVOURITE_INDEX_OPTIONS
             self.add_item(ClearFavouriteButton(track, row=1, disabled=not hasRating))
 
+            self.add_item(
+                ExcludeFromRatingButton(
+                    track,
+                    row=2,
+                    disabled=any([
+                        track.getRating() == -1,
+                        all(
+                            [
+                                trackReLoop.getRating() == -1
+                                for trackReLoop in self.album.tracks if trackReLoop != track
+                            ]
+                        )]
+                    ),
+                )
+            )
+
             self.add_item(PreviousTrackButton(row=2, disabled=not isFirstSong))
             self.add_item(NextTrackButton(row=2, disabled=isLastSong))
-        
-        self.add_item(SaveRatingButton(row=2))
-        self.add_item(OpenLink("Play Song On Spotify", track.link, row=2))
-        
+
+        self.add_item(OpenLink("Play Song On Spotify", track.link, row=3))
         self.add_item(CancelButton(row=3))
+        self.add_item(SaveRatingButton(row=3))
 
     async def showTrackAndRating(self, ctx: discord.Interaction):
         track = self.album.tracks[self.index]
@@ -274,7 +325,7 @@ class Track:
             else:
                 return self.rating
         elif self.rating == -1 and formatted:
-            return "Skipped"
+            return "Excluded"
         else:
             return self.rating
 
@@ -302,6 +353,22 @@ class FavouriteButton(discord.ui.Button):
         
         await view.showTrackAndRating(ctx)
 
+class ExcludeFromRatingButton(discord.ui.Button):
+    def __init__(self, track: Track, **kwargs):
+        self.track = track
+        
+        super().__init__(
+            label=f"Exclude From Rating", style=discord.ButtonStyle.secondary, emoji="↪️", **kwargs
+        )
+
+    async def callback(self, ctx: discord.Interaction):
+        view: SongRatingView = self.view
+
+        self.track.setRating(-1)
+        self.track.setFavouriteIndex(None)
+        
+        await view.showTrackAndRating(ctx)
+
 class ClearFavouriteButton(discord.ui.Button):
     def __init__(self, track: Track, **kwargs):
         self.track = track
@@ -326,7 +393,7 @@ class TrackRatingEmbedReply(EmbedReply):
             title,
             "albumratings",
             url=track.album.link + "?=discordIsBroken=True",
-            description="Assign rating/comment, or favourite/ignore the song using the buttons/box below. Move through the tracklist using the Next/Previous buttons, and when all songs are rated, save the rating using the Finish Rating button.",
+            description="Assign rating/comment, or favourite/exclude the song using the buttons/box below; move through the tracklist using the Next/Previous buttons. When all songs are rated, save using the Finish Rating button.",
         )
 
         self.set_thumbnail(url=track.album.coverImage)
