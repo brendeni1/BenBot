@@ -10,7 +10,7 @@ from src.utils import dates
 from src.utils import images
 from src.utils import text
 
-from src.classes import EmbedReply
+from src.classes import EmbedReply, OpenLink
 
 from src import constants
 
@@ -20,6 +20,12 @@ SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 # Timeouts in mins.
 TIMEOUT_TO_PICK_ALBUM = 1 * (60)
 TIMEOUT_FOR_RATING_SELECT = 300 * (60)
+
+FAVOURITE_INDEX_OPTIONS = sorted([
+    1,
+    2,
+    3,
+])
 
 spotifyClient = spotipy.Spotify(
     auth_manager=SpotifyClientCredentials(
@@ -33,9 +39,10 @@ class Artist:
         self.name = name
         self.link = link
 
+
 class CancelButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Cancel", style=discord.ButtonStyle.danger, emoji="⛔")
+    def __init__(self, **kwargs):
+        super().__init__(label="Cancel Rating", style=discord.ButtonStyle.danger, emoji="⛔", **kwargs)
 
     async def callback(self, ctx: discord.ApplicationContext):
         self.view.disable_all_items()
@@ -46,30 +53,33 @@ class CancelButton(discord.ui.Button):
             "Album Rating - Cancelled",
             "albumratings",
             True,
-            description="Album rating cancelled."
+            description="Album rating cancelled.",
         )
-        
+
         await ctx.response.edit_message(view=self.view, embed=reply)
 
+
 class SaveRatingButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Save Rating", style=discord.ButtonStyle.success, emoji="💾")
+    def __init__(self, **kwargs):
+        super().__init__(
+            label="Save Rating", style=discord.ButtonStyle.success, emoji="💾", **kwargs
+        )
 
     async def callback(self, ctx: discord.Interaction):
         self.view.disable_all_items()
         self.view.stop()
 
         reply = EmbedReply(
-            "Album Rating - Saved",
-            "albumratings",
-            description="Album rating saved. ✅"
+            "Album Rating - Saved", "albumratings", description="Album rating saved. ✅"
         )
 
         await ctx.response.edit_message(view=self.view, embed=reply)
 
 class NextTrackButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Next Track", style=discord.ButtonStyle.secondary, emoji="➡️")
+    def __init__(self, **kwargs):
+        super().__init__(
+            label="Next Track", style=discord.ButtonStyle.primary, emoji="➡️", **kwargs
+        )
 
     async def callback(self, ctx: discord.Interaction):
         view: SongRatingView = self.view
@@ -79,9 +89,12 @@ class NextTrackButton(discord.ui.Button):
         else:
             await view.showTrackAndRating(ctx)
 
+
 class PreviousTrackButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Previous Track", style=discord.ButtonStyle.secondary, emoji="⬅️")
+    def __init__(self, **kwargs):
+        super().__init__(
+            label="Previous Track", style=discord.ButtonStyle.primary, emoji="⬅️", **kwargs
+        )
 
     async def callback(self, ctx: discord.Interaction):
         view: SongRatingView = self.view
@@ -99,31 +112,51 @@ class SongRatingView(discord.ui.View):
         self.message: discord.Message | None = None
 
         self._updateItems()
-    
+
     def _updateItems(self):
         self.clear_items()
 
         track = self.album.tracks[self.index]
+        trackAmount = len(self.album.tracks)
 
-        self.add_item(SelectSongRating(track))
-        self.add_item(CancelButton())
-        if self.index > 0:
-            self.add_item(PreviousTrackButton())
-        if self.index < len(self.album.tracks) - 1:
-            self.add_item(NextTrackButton())
-        if self.index == len(self.album.tracks) - 1:
-            self.add_item(SaveRatingButton())
+        self.add_item(SelectSongRating(track, row=0))
+
+        if trackAmount > 1:
+            currentFavouriteIndex = track.getFavouriteIndex()
+
+            for indexOption in FAVOURITE_INDEX_OPTIONS:
+                if (currentFavouriteIndex == indexOption) or (trackAmount < indexOption):
+                    self.add_item(FavouriteButton(indexOption, track, row=1, disabled=True))
+
+                    continue
+
+                self.add_item(FavouriteButton(indexOption, track, row=1))
+            
+            hasRating: bool = currentFavouriteIndex in FAVOURITE_INDEX_OPTIONS
+            self.add_item(ClearFavouriteButton(track, row=1, disabled=not hasRating))
+        
+        isFirstSong: bool = self.index > 0
+        isLastSong: bool = self.index == len(self.album.tracks) - 1
+        
+        self.add_item(PreviousTrackButton(row=2, disabled=not isFirstSong))
+        self.add_item(NextTrackButton(row=2, disabled=isLastSong))
+        self.add_item(SaveRatingButton(row=2, disabled=not isLastSong))
+        self.add_item(OpenLink("Play Song On Spotify", track.link, row=2))
+        
+        self.add_item(CancelButton(row=3))
 
     async def showTrackAndRating(self, ctx: discord.Interaction):
         track = self.album.tracks[self.index]
-        
+
         wholeAlbumEmbed = AlbumRatingEmbedReply(self.album)
         songRatingEmbed = TrackRatingEmbedReply(track)
-        
+
         self._updateItems()
-        
-        await ctx.response.edit_message(embeds=[wholeAlbumEmbed, songRatingEmbed], view=self)
-    
+
+        await ctx.response.edit_message(
+            embeds=[wholeAlbumEmbed, songRatingEmbed], view=self
+        )
+
     async def on_timeout(self):
         self.disable_all_items()
 
@@ -131,20 +164,27 @@ class SongRatingView(discord.ui.View):
             "Album Rating - Timed Out",
             "albumratings",
             True,
-            description=f"Album rating timed out after {round((TIMEOUT_FOR_RATING_SELECT/60)/60, 2)} hrs of inactivity. Please retry the rating."
+            description=f"Album rating timed out after {round((TIMEOUT_FOR_RATING_SELECT/60)/60, 2)} hrs of inactivity. Please retry the rating.",
         )
 
         if self.message:
             await self.message.edit(embed=reply, view=self)
 
+
 class SelectSongRating(discord.ui.Select):
-    def __init__(self, track: "Track"):
+    def __init__(self, track: "Track", **kwargs):
         self.track = track
 
-        scale = list(text.frange(0, track.album.ratingOutOf + constants.RATINGS_STEP, constants.RATINGS_STEP))
+        scale = list(
+            text.frange(
+                0,
+                track.album.ratingOutOf + constants.RATINGS_STEP,
+                constants.RATINGS_STEP,
+            )
+        )
 
         super().__init__(
-            placeholder=f"Rate Song ({scale[0]}-{scale[-1]})",
+            placeholder=f"Choose Rating ({scale[0]}-{scale[-1]})",
             options=[
                 discord.SelectOption(
                     label=f"{i}/{track.album.ratingOutOf}",
@@ -153,12 +193,16 @@ class SelectSongRating(discord.ui.Select):
                 )
                 for i in scale
             ],
+            **kwargs
         )
 
     async def callback(self, ctx: discord.Interaction):
+        view: SongRatingView = self.view
+
         self.track.setRating(float(self.values[0]))
 
-        await ctx.response.defer()
+        await view.showTrackAndRating(ctx)
+
 class Track:
     def __init__(
         self,
@@ -170,9 +214,9 @@ class Track:
         trackNumber: int,
         durationMS: int,
         rating: float = None,
-        favourite: bool = False,
+        favouriteIndex: int | None = None,
         comments: str = None,
-        album: "Album" = None
+        album: "Album" = None,
     ):
         self.spotifyID = spotifyID
         self.name = name
@@ -182,7 +226,7 @@ class Track:
         self.trackNumber = trackNumber
         self.durationMS = durationMS
         self.rating = rating
-        self.favourite = favourite
+        self.favouriteIndex = favouriteIndex
         self.comments = comments
         self.album = album
 
@@ -196,23 +240,30 @@ class Track:
             return ", ".join([artist.name for artist in self.artists])
         else:
             return self.artists
-        
+
     def setComments(self, comments: str | None):
         self.comments = comments
 
     def parseComments(self, formatted: bool = False):
         if formatted:
-            return "(No Comments)" if not self.comments else self.comments
+            return "*(No Comments)*" if not self.comments else self.comments
         else:
             return self.comments
-        
-    def markFavourite(self, state: bool):
-        self.favourite = state
+
+    def setFavouriteIndex(self, idx: int | None):
+        self.favouriteIndex = idx
+
+    def getFavouriteIndex(self) -> int | None:
+        return self.favouriteIndex
 
     def getRating(self, formatted: bool = False, roundedTo: int = 2) -> float:
         if self.rating == None and formatted:
             return "Unrated"
-        elif (self.rating != None) and (self.rating >= 0) and (self.rating <= self.album.ratingOutOf):
+        elif (
+            (self.rating != None)
+            and (self.rating >= 0)
+            and (self.rating <= self.album.ratingOutOf)
+        ):
             if formatted and roundedTo != None:
                 return f"{round(self.rating, abs(roundedTo))}/{self.album.ratingOutOf}"
             elif formatted and roundedTo == None:
@@ -226,25 +277,81 @@ class Track:
         else:
             return self.rating
 
+class FavouriteButton(discord.ui.Button):
+    def __init__(self, ranking: int, track: Track, **kwargs):
+        self.track = track
+        self.ranking = ranking
+
+        medal = constants.RANKING_MEDALS[str(ranking)] if str(ranking) in constants.RANKING_MEDALS else None
+        
+        ordinized = text.ordinal(ranking)
+
+        super().__init__(
+            label=f"{ordinized} Place", style=discord.ButtonStyle.secondary, emoji=medal, **kwargs
+        )
+
+    async def callback(self, ctx: discord.Interaction):
+        view: SongRatingView = self.view
+
+        for track in view.album.tracks:
+            if track.getFavouriteIndex() == self.ranking:
+                track.setFavouriteIndex(None)
+        
+        self.track.setFavouriteIndex(self.ranking)
+        
+        await view.showTrackAndRating(ctx)
+
+class ClearFavouriteButton(discord.ui.Button):
+    def __init__(self, track: Track, **kwargs):
+        self.track = track
+
+        super().__init__(
+            label=f"Unfavourite", style=discord.ButtonStyle.secondary, emoji="🗑️", **kwargs
+        )
+
+    async def callback(self, ctx: discord.Interaction):
+        view: SongRatingView = self.view
+
+        self.track.setFavouriteIndex(None)
+        
+        await view.showTrackAndRating(ctx)
+
 class TrackRatingEmbedReply(EmbedReply):
     def __init__(self, track: Track):
         formattedArtists: str = track.getArtists(True)
 
         title = f"({track.trackNumber}/{track.album.totalTracks()})  👤 {formattedArtists} ⏯️ {track.name} 🔗↗️"
-        super().__init__(title, "albumratings", url=track.album.link+"?=discordIsBroken=True", description="Assign rating/comment, or favourite/ignore the song using the buttons/box below.\n\nMove through the tracklist using the Next/Previous buttons.")
+        super().__init__(
+            title,
+            "albumratings",
+            url=track.album.link + "?=discordIsBroken=True",
+            description="Assign rating/comment, or favourite/ignore the song using the buttons/box below. Move through the tracklist using the Next/Previous buttons, and when all songs are rated, save the rating using the Save Rating button.",
+        )
 
         self.set_thumbnail(url=track.album.coverImage)
         self.colour = track.album.coverImageColour
-        self.set_footer(text=f"Song data provided by Spotify®. Rating ID: {track.album.ratingID}", icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png")
+        self.set_footer(
+            text=f"Song data provided by Spotify®. Rating ID: {track.album.ratingID}",
+            icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png",
+        )
+
+        favouriteIndex = track.getFavouriteIndex()
+
+        medalFormatted = f"{constants.RANKING_MEDALS[str(favouriteIndex)]} {text.ordinal(favouriteIndex)}st Place" if favouriteIndex in FAVOURITE_INDEX_OPTIONS else "*(Not Favourited)*"
 
         self.add_field(
-            name="***Previous Song Rating***",
-            value=f"`{track.getRating(True)}`",
-            inline=True,
+            name="***Favourite Rating***", value=medalFormatted, inline=True
         )
+
         self.add_field(
             name="***Song Comments***", value=track.parseComments(True), inline=True
         )
+
+        self.set_author(
+            name=track.album.createdBy.global_name,
+            icon_url=track.album.createdBy.avatar.url,
+        )
+
 
 class Album:
     def __init__(
@@ -254,14 +361,14 @@ class Album:
         artists: list[Artist],
         link: str,
         releaseDate: datetime,
-        createdBy: int,
+        createdBy: discord.Member,
         createdAt: datetime = dates.simpleDateObj(timeNow=True),
         editedAt: datetime = None,
         tracks: list[Track] | None = None,
         ratingOutOf: int | float = constants.RATINGS_OUT_OF,
         coverImage: str = None,
         coverImageColour: str = None,
-        comments: str = None
+        comments: str = None,
     ):
         self.ratingID = uuid4().hex
         self.spotifyID = spotifyID
@@ -283,34 +390,40 @@ class Album:
 
     def meanRating(self, formatted: bool = False) -> float:
         if not self.tracks:
-            raise Exception("There are no tracks assigned to the album so there is no average rating!")
-        
+            raise Exception(
+                "There are no tracks assigned to the album so there is no average rating!"
+            )
+
         cleanedRatingList: list[float] = []
 
         for track in self.tracks:
             if track.rating == None and formatted:
                 return "Unfinished"
             elif track.rating == None and not formatted:
-                raise ValueError("There is an unrated song in the album rating and an average could not be calculated! Please finish the rating.")
+                raise ValueError(
+                    "There is an unrated song in the album rating and an average could not be calculated! Please finish the rating."
+                )
             elif (track.rating >= 0) and (track.rating <= self.ratingOutOf):
                 cleanedRatingList.append(track.rating)
             elif track.rating == -1:
                 continue
             else:
-                raise Exception(f"Shits broken! Rating condition unaccounted for: {track.rating} on rating {self.ratingID}.")
-        
+                raise Exception(
+                    f"Shits broken! Rating condition unaccounted for: {track.rating} on rating {self.ratingID}."
+                )
+
         mean = round(sum(cleanedRatingList) / len(cleanedRatingList), 1)
 
         if formatted:
             return f"{mean}/{self.ratingOutOf}"
 
         return mean
-    
+
     def serializeRating(self) -> bytes:
         serialized = pickle.dumps(self)
 
         return serialized
-    
+
     def addTrack(self, track: Track):
         track.album = self
 
@@ -321,17 +434,19 @@ class Album:
             return ", ".join([artist.name for artist in self.artists])
         else:
             return self.artists
-    
+
     def setComments(self, comments: str | None):
         self.comments = comments
-    
+
     def parseComments(self, formatted: bool = False):
         if formatted:
-            return "(No Comments)" if not self.comments else self.comments
+            return "*(No Comments)*" if not self.comments else self.comments
         else:
             return self.comments
-    
-    def releaseYear(self, formatted: bool = False, includeMonth: bool = False) -> int | str | None:
+
+    def releaseYear(
+        self, formatted: bool = False, includeMonth: bool = False
+    ) -> int | str | None:
         if not self.releaseDate and formatted:
             return "N/D"
         elif not self.releaseDate and not formatted:
@@ -342,7 +457,10 @@ class Album:
             else:
                 return self.releaseDate.year
         else:
-            raise Exception(f"releaseYear: Invalid release year! Rating ID: {self.ratingID}")
+            raise Exception(
+                f"releaseYear: Invalid release year! Rating ID: {self.ratingID}"
+            )
+
 
 class AlbumRatingEmbedReply(EmbedReply):
     def __init__(self, album: Album):
@@ -353,17 +471,47 @@ class AlbumRatingEmbedReply(EmbedReply):
 
         self.set_thumbnail(url=album.coverImage)
         self.colour = album.coverImageColour
-        self.set_footer(text=f"Album data provided by Spotify®. Rating ID: {album.ratingID}", icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png")
+        self.set_footer(
+            text=f"Album data provided by Spotify®. Rating ID: {album.ratingID}",
+            icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png",
+        )
 
         for track in album.tracks:
-            self.description += f"**{track.trackNumber}.** {track.name} · `{track.getRating(True)}`\n"
+            favouriteIndex = track.getFavouriteIndex()
 
+            if not favouriteIndex:
+                self.description += (
+                    f"**{track.trackNumber}.** {track.name} · `{track.getRating(True)}`\n"
+                )
+            else:
+                medal = constants.RANKING_MEDALS[str(favouriteIndex)] if str(favouriteIndex) in constants.RANKING_MEDALS else f"({text.ordinal(favouriteIndex)} Place)"
+                
+                self.description += (
+                    f"**{track.trackNumber}.** {medal} {track.name} · `{track.getRating(True)}`\n"
+                )
 
-        self.add_field(name="***Overall Album Rating***", value=f"`{album.meanRating(True)}`", inline=True)
-        self.add_field(name="***Album Rating By***", value=f"<@{album.createdBy}>", inline=True)
-        self.add_field(name="***Album Rated On***", value=f"{dates.formatSimpleDate(album.createdAt)}", inline=True)
+        self.add_field(
+            name="***Overall Album Rating***",
+            value=f"`{album.meanRating(True)}`",
+            inline=True,
+        )
+        self.add_field(
+            name="***Album Rating By***", value=album.createdBy.mention, inline=True
+        )
+        self.add_field(
+            name="***Album Rated On***",
+            value=f"{dates.formatSimpleDate(album.createdAt)}",
+            inline=True,
+        )
 
-        self.add_field(name="***Album Comments***", value=album.parseComments(True), inline=False)
+        self.add_field(
+            name="***Album Comments***", value=album.parseComments(True), inline=False
+        )
+
+        self.set_author(
+            name=album.createdBy.global_name, icon_url=album.createdBy.avatar.url
+        )
+
 
 class EditCommentModal(discord.ui.Modal):
     def __init__(self, obj: Album | Track, *args, **kwargs) -> None:
@@ -373,21 +521,32 @@ class EditCommentModal(discord.ui.Modal):
 
         self.add_item(
             discord.ui.InputText(
-                label="Edit Comments",
-                max_length=1000,
-                value=obj.parseComments()
+                label="Edit Comments", max_length=1000, value=obj.parseComments()
             )
         )
-    
+
     async def callback(self, ctx: discord.Interaction):
         if not self.children[0].value:
             self.obj.setComments(None)
         else:
             self.obj.setComments(self.children[0].value)
 
+
 class SelectAlbum(discord.ui.Select):
     def __init__(self, choices: list[tuple]):
-        super().__init__(placeholder="Choose an album...", options=[discord.SelectOption(label=f"{choice[1]} · {choice[3]}", description=choice[2], emoji=text.numberToEmoji(choice[0] + 1), value=choice[4]) for choice in choices])
+        super().__init__(
+            placeholder="Choose an album...",
+            options=[
+                discord.SelectOption(
+                    label=f"{choice[1]} · {choice[3]}",
+                    description=choice[2],
+                    emoji=text.numberToEmoji(choice[0] + 1),
+                    value=choice[4],
+                )
+                for choice in choices
+            ],
+            row=0
+        )
 
     async def callback(self, ctx: discord.Interaction):
         self.view.choice = self.values[0]
@@ -398,15 +557,19 @@ class SelectAlbum(discord.ui.Select):
 
         await ctx.delete_original_response()
 
-class EditComments(discord.ui.Button):
-    def __init__(self, obj: Album | Track):
-        super().__init__(label="Edit Comment", style=discord.ButtonStyle.primary, emoji="💬")
+
+class EditCommentsButton(discord.ui.Button):
+    def __init__(self, obj: Album | Track, **kwargs):
+        super().__init__(
+            label="Edit Comment", style=discord.ButtonStyle.primary, emoji="💬", **kwargs
+        )
 
         self.obj = obj
 
     async def callback(self, ctx: discord.ApplicationContext):
         self.view.disable_all_items()
         self.view.stop()
+
 
 class ChooseAlbumView(discord.ui.View):
     def __init__(self, choices: list[tuple]):
@@ -424,11 +587,12 @@ class ChooseAlbumView(discord.ui.View):
             "Album Rating - Timed Out",
             "albumratings",
             True,
-            description="Album rating timed out. Please retry."
+            description="Album rating timed out. Please retry.",
         )
 
         if self.message:
             await self.message.edit(embed=reply, view=self)
+
 
 def searchForAlbumName(query: str, limit=5, type="album") -> list:
     if not query:
@@ -438,6 +602,7 @@ def searchForAlbumName(query: str, limit=5, type="album") -> list:
 
     return albumResults
 
+
 def fetchAlbumDetailsByID(albumID: str) -> dict:
     if not albumID:
         raise ValueError("utils > music.py > albumDetails: Album ID is blank!")
@@ -446,13 +611,23 @@ def fetchAlbumDetailsByID(albumID: str) -> dict:
 
     return albumResults
 
-def parseAlbumDetails(data: dict, createdBy: int, createdAt: datetime = None, comments: str = None, ratingOutOf = constants.RATINGS_OUT_OF) -> Album:
+
+def parseAlbumDetails(
+    data: dict,
+    createdBy: discord.Member,
+    createdAt: datetime = None,
+    comments: str = None,
+    ratingOutOf=constants.RATINGS_OUT_OF,
+) -> Album:
     if not data:
         raise ValueError("No data provided to album parser.")
-    
+
     spotifyID = data["id"]
     name = data["name"]
-    artists = [Artist(artist["id"], artist["name"], artist["external_urls"]["spotify"]) for artist in data["artists"]]
+    artists = [
+        Artist(artist["id"], artist["name"], artist["external_urls"]["spotify"])
+        for artist in data["artists"]
+    ]
     link = data["external_urls"]["spotify"]
     releaseDate = dates.simpleDateObj(data["release_date"])
 
@@ -461,7 +636,9 @@ def parseAlbumDetails(data: dict, createdBy: int, createdAt: datetime = None, co
     coverImageColour = None
 
     if coverImage:
-        coverImageColour = discord.Colour.from_rgb(*(int(i) for i in images.extractColours(coverImage)[0]))
+        coverImageColour = discord.Colour.from_rgb(
+            *(int(i) for i in images.extractColours(coverImage)[0])
+        )
 
     album = Album(
         spotifyID,
@@ -474,11 +651,14 @@ def parseAlbumDetails(data: dict, createdBy: int, createdAt: datetime = None, co
         ratingOutOf=ratingOutOf,
         coverImage=coverImage,
         coverImageColour=coverImageColour,
-        comments=comments
+        comments=comments,
     )
 
     for trackData in data["tracks"]["items"]:
-        trackArtists = [Artist(artist["id"], artist["name"], artist["external_urls"]["spotify"]) for artist in trackData["artists"]]
+        trackArtists = [
+            Artist(artist["id"], artist["name"], artist["external_urls"]["spotify"])
+            for artist in trackData["artists"]
+        ]
 
         track = Track(
             trackData["id"],
@@ -487,9 +667,9 @@ def parseAlbumDetails(data: dict, createdBy: int, createdAt: datetime = None, co
             trackData["explicit"],
             trackData["external_urls"]["spotify"],
             trackData["track_number"],
-            trackData["duration_ms"]
+            trackData["duration_ms"],
         )
-        
+
         album.addTrack(track)
 
     return album

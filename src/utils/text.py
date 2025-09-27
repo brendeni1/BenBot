@@ -48,3 +48,11 @@ def frange(start, stop=None, step=1.0):
             x += step
     else:
         raise ValueError("frange() step argument must not be zero")
+
+def ordinal(n: int) -> str:
+    # Handle special cases like 11th, 12th, 13th
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"

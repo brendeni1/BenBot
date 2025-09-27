@@ -64,7 +64,7 @@ class AlbumRatings(commands.Cog):
 
             albumDetailsFromID = music.fetchAlbumDetailsByID(view.choice)
 
-            parsedAlbumDetails: music.Album = music.parseAlbumDetails(albumDetailsFromID, ctx.user.id)
+            parsedAlbumDetails: music.Album = music.parseAlbumDetails(albumDetailsFromID, ctx.user)
 
             # start at first track
             firstTrack = parsedAlbumDetails.tracks[0]

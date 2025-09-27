@@ -3,7 +3,13 @@ import sqlite3
 
 from src.utils.db import *
 from src.utils import text
-            
+
+class OpenLink(discord.ui.Button):
+    def __init__(self, label: str, link: str, **kwargs):
+        super().__init__(
+            label=label, url=link, style=discord.ButtonStyle.link, **kwargs
+        )
+
 class SelectGuildMember(discord.ui.Select):
     def __init__(self, members: list[discord.Member], placeholderTitle: str, noMemberOption: bool):
         options = []
