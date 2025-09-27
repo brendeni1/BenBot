@@ -62,7 +62,7 @@ class CancelButton(discord.ui.Button):
 class SaveRatingButton(discord.ui.Button):
     def __init__(self, **kwargs):
         super().__init__(
-            label="Save Rating", style=discord.ButtonStyle.success, emoji="💾", **kwargs
+            label="Finish Rating", style=discord.ButtonStyle.success, emoji="💾", **kwargs
         )
 
     async def callback(self, ctx: discord.Interaction):
@@ -119,6 +119,9 @@ class SongRatingView(discord.ui.View):
         track = self.album.tracks[self.index]
         trackAmount = len(self.album.tracks)
 
+        isFirstSong: bool = self.index > 0
+        isLastSong: bool = self.index == len(self.album.tracks) - 1
+
         self.add_item(SelectSongRating(track, row=0))
 
         if trackAmount > 1:
@@ -134,13 +137,11 @@ class SongRatingView(discord.ui.View):
             
             hasRating: bool = currentFavouriteIndex in FAVOURITE_INDEX_OPTIONS
             self.add_item(ClearFavouriteButton(track, row=1, disabled=not hasRating))
+
+            self.add_item(PreviousTrackButton(row=2, disabled=not isFirstSong))
+            self.add_item(NextTrackButton(row=2, disabled=isLastSong))
         
-        isFirstSong: bool = self.index > 0
-        isLastSong: bool = self.index == len(self.album.tracks) - 1
-        
-        self.add_item(PreviousTrackButton(row=2, disabled=not isFirstSong))
-        self.add_item(NextTrackButton(row=2, disabled=isLastSong))
-        self.add_item(SaveRatingButton(row=2, disabled=not isLastSong))
+        self.add_item(SaveRatingButton(row=2))
         self.add_item(OpenLink("Play Song On Spotify", track.link, row=2))
         
         self.add_item(CancelButton(row=3))
@@ -325,7 +326,7 @@ class TrackRatingEmbedReply(EmbedReply):
             title,
             "albumratings",
             url=track.album.link + "?=discordIsBroken=True",
-            description="Assign rating/comment, or favourite/ignore the song using the buttons/box below. Move through the tracklist using the Next/Previous buttons, and when all songs are rated, save the rating using the Save Rating button.",
+            description="Assign rating/comment, or favourite/ignore the song using the buttons/box below. Move through the tracklist using the Next/Previous buttons, and when all songs are rated, save the rating using the Finish Rating button.",
         )
 
         self.set_thumbnail(url=track.album.coverImage)
@@ -337,7 +338,7 @@ class TrackRatingEmbedReply(EmbedReply):
 
         favouriteIndex = track.getFavouriteIndex()
 
-        medalFormatted = f"{constants.RANKING_MEDALS[str(favouriteIndex)]} {text.ordinal(favouriteIndex)}st Place" if favouriteIndex in FAVOURITE_INDEX_OPTIONS else "*(Not Favourited)*"
+        medalFormatted = f"{constants.RANKING_MEDALS[str(favouriteIndex)]} {text.ordinal(favouriteIndex)} Place" if favouriteIndex in FAVOURITE_INDEX_OPTIONS else "*(Not Favourited)*"
 
         self.add_field(
             name="***Favourite Rating***", value=medalFormatted, inline=True
