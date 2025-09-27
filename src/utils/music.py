@@ -27,6 +27,9 @@ FAVOURITE_INDEX_OPTIONS = sorted([
     3,
 ])
 
+COMMENT_LENGTH_CHARACTER_LIMIT = 1000
+COMMENT_LENGTH_CHARACTER_LIMIT_IN_EMBED = 100
+
 spotifyClient = spotipy.Spotify(
     auth_manager=SpotifyClientCredentials(
         client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET
@@ -116,7 +119,7 @@ class NextTrackButton(discord.ui.Button):
     async def callback(self, ctx: discord.Interaction):
         view: SongRatingView = self.view
         view.index += 1
-        if view.index >= len(view.album.tracks):
+        if view.index >= view.album.totalTracks():
             await view.finish()
         else:
             await view.showTrackAndRating(ctx)
@@ -149,12 +152,28 @@ class SongRatingView(discord.ui.View):
         self.clear_items()
 
         track: Track = self.album.tracks[self.index]
-        trackAmount = len(self.album.tracks)
+        trackAmount = self.album.totalTracks()
 
         isFirstSong: bool = self.index > 0
-        isLastSong: bool = self.index == len(self.album.tracks) - 1
+        isLastSong: bool = self.index == trackAmount - 1
 
         self.add_item(SelectSongRating(track, row=0))
+
+        self.add_item(
+            EditCommentsButton(
+                "Edit Song Comments",
+                track,
+                row=2
+            )
+        )
+
+        self.add_item(
+            EditCommentsButton(
+                "Edit Album Comments",
+                self.album,
+                row=2
+            )
+        )
 
         if trackAmount > 1:
             currentFavouriteIndex = track.getFavouriteIndex()
@@ -177,7 +196,7 @@ class SongRatingView(discord.ui.View):
             self.add_item(
                 ExcludeFromRatingButton(
                     track,
-                    row=2,
+                    row=3,
                     disabled=any([
                         track.getRating() == -1,
                         all(
@@ -190,12 +209,12 @@ class SongRatingView(discord.ui.View):
                 )
             )
 
-            self.add_item(PreviousTrackButton(row=2, disabled=not isFirstSong))
-            self.add_item(NextTrackButton(row=2, disabled=isLastSong))
+            self.add_item(PreviousTrackButton(row=3, disabled=not isFirstSong))
+            self.add_item(NextTrackButton(row=3, disabled=isLastSong))
 
-        self.add_item(OpenLink("Play Song On Spotify", track.link, row=3))
-        self.add_item(CancelButton(row=3))
-        self.add_item(SaveRatingButton(row=3))
+        self.add_item(OpenLink("Play Song On Spotify", track.link, row=4))
+        self.add_item(CancelButton(row=4))
+        self.add_item(SaveRatingButton(row=4))
 
     async def showTrackAndRating(self, ctx: discord.Interaction):
         track = self.album.tracks[self.index]
@@ -407,9 +426,10 @@ class TrackRatingEmbedReply(EmbedReply):
 
         medalFormatted = f"{constants.RANKING_MEDALS[str(favouriteIndex)]} {text.ordinal(favouriteIndex)} Place" if favouriteIndex in FAVOURITE_INDEX_OPTIONS else "*(Not Favourited)*"
 
-        self.add_field(
-            name="***Favourite Rating***", value=medalFormatted, inline=True
-        )
+        if track.album.totalTracks() > 1:
+            self.add_field(
+                name="***Favourite Rating***", value=medalFormatted, inline=True
+            )
 
         self.add_field(
             name="***Song Comments***", value=track.parseComments(True), inline=True
@@ -529,6 +549,16 @@ class Album:
                 f"releaseYear: Invalid release year! Rating ID: {self.ratingID}"
             )
 
+class EditCommentsButton(discord.ui.Button):
+    def __init__(self, label: str, obj: Album | Track, **kwargs):
+        self.obj = obj
+        
+        super().__init__(
+            label=label, style=discord.ButtonStyle.secondary, emoji="💬", **kwargs
+        )
+
+    async def callback(self, ctx: discord.ApplicationContext):
+        await ctx.response.send_modal(EditCommentsModal(self.obj, self.view))
 
 class AlbumRatingEmbedReply(EmbedReply):
     def __init__(self, album: Album):
@@ -547,16 +577,15 @@ class AlbumRatingEmbedReply(EmbedReply):
         for track in album.tracks:
             favouriteIndex = track.getFavouriteIndex()
 
-            if not favouriteIndex:
-                self.description += (
-                    f"**{track.trackNumber}.** {track.name} · `{track.getRating(True)}`\n"
-                )
-            else:
-                medal = constants.RANKING_MEDALS[str(favouriteIndex)] if str(favouriteIndex) in constants.RANKING_MEDALS else f"({text.ordinal(favouriteIndex)} Place)"
+            medal = f" {constants.RANKING_MEDALS[str(favouriteIndex)] if str(favouriteIndex) in constants.RANKING_MEDALS else f'({text.ordinal(favouriteIndex)} Place)'} " if favouriteIndex else ""
+
+            comments = track.parseComments()
+            
+            formattedComments = f"\n\u00A0\u00A0\u00A0\u00A0⤷ 💬 {text.truncateString(comments, COMMENT_LENGTH_CHARACTER_LIMIT_IN_EMBED)[0]}" if comments else ""
                 
-                self.description += (
-                    f"**{track.trackNumber}.** {medal} {track.name} · `{track.getRating(True)}`\n"
-                )
+            self.description += (
+                f"**{track.trackNumber}.**{medal}{track.name} · `{track.getRating(True)}`{formattedComments}\n"
+            )
 
         self.add_field(
             name="***Overall Album Rating***",
@@ -581,15 +610,18 @@ class AlbumRatingEmbedReply(EmbedReply):
         )
 
 
-class EditCommentModal(discord.ui.Modal):
-    def __init__(self, obj: Album | Track, *args, **kwargs) -> None:
-        super().__init__(title=f"Comments · {obj.name}", *args, **kwargs)
-
+class EditCommentsModal(discord.ui.Modal):
+    def __init__(self, obj: Album | Track, view: SongRatingView, *args, **kwargs) -> None:
         self.obj = obj
+        self.view = view
+
+        super().__init__(title=text.truncateString(f"Comments On {obj.name}", 45)[0], *args, **kwargs)
 
         self.add_item(
             discord.ui.InputText(
-                label="Edit Comments", max_length=1000, value=obj.parseComments()
+                style=discord.InputTextStyle.paragraph,
+                label="Edit Comments", max_length=COMMENT_LENGTH_CHARACTER_LIMIT, value=obj.parseComments(),
+                required=False
             )
         )
 
@@ -598,7 +630,8 @@ class EditCommentModal(discord.ui.Modal):
             self.obj.setComments(None)
         else:
             self.obj.setComments(self.children[0].value)
-
+        
+        await self.view.showTrackAndRating(ctx)
 
 class SelectAlbum(discord.ui.Select):
     def __init__(self, choices: list[tuple]):
@@ -621,23 +654,8 @@ class SelectAlbum(discord.ui.Select):
 
         self.view.disable_all_items()
         self.view.stop()
-        await ctx.response.edit_message(view=self.view)
-
-        await ctx.delete_original_response()
-
-
-class EditCommentsButton(discord.ui.Button):
-    def __init__(self, obj: Album | Track, **kwargs):
-        super().__init__(
-            label="Edit Comment", style=discord.ButtonStyle.primary, emoji="💬", **kwargs
-        )
-
-        self.obj = obj
-
-    async def callback(self, ctx: discord.ApplicationContext):
-        self.view.disable_all_items()
-        self.view.stop()
-
+        
+        await ctx.response.defer()
 
 class ChooseAlbumView(discord.ui.View):
     def __init__(self, choices: list[tuple]):

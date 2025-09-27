@@ -74,8 +74,9 @@ class AlbumRatings(commands.Cog):
             wholeAlbumEmbed = music.AlbumRatingEmbedReply(parsedAlbumDetails)
             songRatingEmbed = music.TrackRatingEmbedReply(firstTrack)
 
-            view.message = await ctx.respond(
-                embeds=[wholeAlbumEmbed, songRatingEmbed], view=view, ephemeral=True
+            await msg.edit_original_response(
+                embeds=[wholeAlbumEmbed, songRatingEmbed],
+                view=view
             )
 
             timedOut = await view.wait()
