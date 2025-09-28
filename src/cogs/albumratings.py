@@ -122,6 +122,8 @@ class AlbumRatings(commands.Cog):
                 embeds=[wholeAlbumEmbed, songRatingEmbed], view=view
             )
 
+            originalResponse = await msg.original_response()
+
             timedOut = await view.wait()
 
             if timedOut or view.cancelled:
@@ -164,7 +166,7 @@ class AlbumRatings(commands.Cog):
                 description=f"Album rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}",
             )
 
-            await msg.edit_original_response(embed=savedReply, view=None)
+            await originalResponse.edit(embed=savedReply, view=None)
         except Exception as e:
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
@@ -379,6 +381,7 @@ class AlbumRatings(commands.Cog):
             msg = await ctx.respond(
                 embeds=[wholeAlbumEmbed, songRatingEmbed], view=view, ephemeral=True
             )
+            msg = await msg.original_response()
 
             timedOut = await view.wait()
 
@@ -447,9 +450,9 @@ class AlbumRatings(commands.Cog):
                     description=f"Album rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}",
                 )
 
-                await msg.edit_original_response(embed=savedReply, view=None)
+                await msg.edit(embed=savedReply, view=None)
             else:
-                await msg.edit_original_response(embed=finishedRatingEmbed, view=None)
+                await msg.edit(embed=finishedRatingEmbed, view=None)
 
                 packedAlbumRating = unpackedRating.packAlbumRating(msg)
 
