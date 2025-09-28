@@ -47,7 +47,7 @@ class Artist:
 
 
 class FinishedRatingPersistentMessageButtonsView(discord.ui.View):
-    def __init__(self, *, albumLink: str = None):
+    def __init__(self, albumLink: str = None):
         super().__init__(timeout=None)
 
         self.add_item(OpenLink("Open Album on Spotify", albumLink))
