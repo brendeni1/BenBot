@@ -308,6 +308,11 @@ class AlbumRatings(commands.Cog):
             
             packedRating = targetRating[0]
             oldMessageID = packedRating[7]
+            createdByID = packedRating[1]
+            invokedBy: discord.User = ctx.user
+
+            if (createdByID != invokedBy.id) and not (await self.bot.is_owner(invokedBy)):
+                raise Exception(f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`")
 
             unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
 
@@ -419,7 +424,7 @@ class AlbumRatings(commands.Cog):
             createdByID = packedRating[1]
             invokedBy: discord.User = ctx.user
 
-            if createdByID != invokedBy.id:
+            if (createdByID != invokedBy.id) and not (await self.bot.is_owner(invokedBy)):
                 raise Exception(f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`")
 
             unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
