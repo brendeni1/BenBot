@@ -394,7 +394,7 @@ class AlbumRatings(commands.Cog):
 
             finishedRatingEmbed = music.AlbumRatingEmbedReply(unpackedRating)
 
-            if send_to_rating_channel or ctx.channel_id == RATING_CHANNEL:
+            if send_to_rating_channel:
                 oldMessageNotFoundWarning: str = ""
 
                 oldMessageReference = None
@@ -471,6 +471,154 @@ class AlbumRatings(commands.Cog):
                         id,
                     ),
                 )
+        except Exception as e:
+            reply = EmbedReply(
+                "Album Ratings - Error", "albumratings", True, description=str(e)
+            )
+
+            await reply.send(ctx, ephemeral=True)
+
+    @albumRatings.command(
+        description="Change the date an album was rated on (by Rating ID).",
+        guild_ids=[799341195109203998],
+    )
+    async def changedate(
+        self,
+        ctx: discord.ApplicationContext,
+        id: discord.Option(
+            str,
+            description="Provide the Rating ID to edit. Use the list command to find this ID.",
+            required=True,
+        ),  # type: ignore
+        newdate: discord.Option(
+            str,
+            description="The date string of the new target rating date. Example: 01/31/2025 12:34:56",
+            required=True,
+        ),  # type: ignore
+        send_to_rating_channel: discord.Option(
+            bool,
+            description="Instead of replying to the command here, send the embed to the rating channel without context.",
+            default=True,
+        ),  # type: ignore
+        edit_original_rating_message: discord.Option(
+            bool,
+            description="Instead of re-sending the updated rating message, update the original one.",
+            default=True,
+        ),  # type: ignore
+    ):
+        try:
+            newDate = dates.simpleDateObj(newdate)
+
+            ratingChannel = self.bot.get_channel(RATING_CHANNEL)
+
+            if not ratingChannel and (edit_original_rating_message or send_to_rating_channel):
+                raise Exception(
+                    "The rating channel could not be found.\n\nSet send_to_rating_channel=False and edit_original_rating_message=False when using this command."
+                )
+
+            database = LocalDatabase()
+
+            targetRating = database.get(
+                "SELECT * FROM albumRatings WHERE ratingID = ?", (id,)
+            )
+
+            if not targetRating:
+                raise Exception(
+                    "There were no ratings with that ID found!\n\nTry using the list command to narrow down your search."
+                )
+
+            packedRating = targetRating[0]
+            oldMessageID = packedRating[7]
+            createdByID = packedRating[1]
+            invokedBy: discord.User = ctx.user
+
+            if (createdByID != invokedBy.id) and not (
+                await self.bot.is_owner(invokedBy)
+            ):
+                raise Exception(
+                    f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`"
+                )
+
+            unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
+
+            oldDate = unpackedRating.createdAt
+            unpackedRating.createdAt = newDate
+            
+            finishedRatingEmbed = music.AlbumRatingEmbedReply(unpackedRating)
+
+            oldMessageNotFoundWarning: str = ""
+            
+            if send_to_rating_channel:
+                oldMessageReference = None
+
+                try:
+                    oldMessageReference = await ratingChannel.fetch_message(
+                        oldMessageID
+                    )
+                except discord.errors.NotFound:
+                    oldMessageNotFoundWarning = "\n\n⚠️WARN: The original message tied to this rating could not be found and edit_original_rating_message was set to True when this command was invoked. Instead of editing the message, a new one was sent and can be found through the link above."
+
+                    pass
+
+                if not oldMessageNotFoundWarning and edit_original_rating_message:
+                    ratingMessageReference = await oldMessageReference.edit(
+                        embed=finishedRatingEmbed,
+                        view=music.FinishedRatingPersistentMessageButtonsView(
+                            unpackedRating.link
+                        ),
+                    )
+                else:
+                    if oldMessageReference:
+                        await oldMessageReference.delete()
+
+                    ratingMessageReference = await ratingChannel.send(
+                        embed=finishedRatingEmbed
+                    )
+            else:
+                finishedSentRating = await finishedRatingEmbed.send(
+                    ctx,
+                    ephemeral=True
+                )
+
+                try:
+                    ratingMessageReference = await ratingChannel.fetch_message(
+                        oldMessageID
+                    )
+                except discord.errors.NotFound:
+                    ratingMessageReference = await finishedSentRating.original_response()
+                    pass
+
+            packedAlbumRating = unpackedRating.packAlbumRating(
+                ratingMessageReference
+            )
+
+            database.setOne(
+                """
+                UPDATE `albumRatings` 
+                SET createdAt = ?, ratingArtist = ?, ratingAlbum = ?, formattedRating = ?, lastRelatedMessage = ?, serializedRating = ?
+                WHERE ratingID = ?
+                """,
+                (
+                    packedAlbumRating[2],
+                    packedAlbumRating[4],
+                    packedAlbumRating[5],
+                    packedAlbumRating[6],
+                    packedAlbumRating[7],
+                    packedAlbumRating[8],
+                    id,
+                ),
+            )
+
+            savedReply = EmbedReply(
+                "Album Ratings - Change Date",
+                "albumratings",
+                description=f"Album rating date changed. ✅\n\nOld Date: {dates.formatSimpleDate(oldDate, discordDateFormat="f")}\nNew Date: {dates.formatSimpleDate(newDate, discordDateFormat="f")}\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}",
+            )
+
+            await savedReply.send(
+                ctx,
+                ephemeral=True
+            )
         except Exception as e:
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
