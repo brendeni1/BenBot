@@ -572,7 +572,10 @@ class AlbumRatings(commands.Cog):
                         await oldMessageReference.delete()
 
                     ratingMessageReference = await ratingChannel.send(
-                        embed=finishedRatingEmbed
+                        embed=finishedRatingEmbed,
+                        view=music.FinishedRatingPersistentMessageButtonsView(
+                            unpackedRating.link
+                        ),
                     )
             else:
                 finishedSentRating = await finishedRatingEmbed.send(
