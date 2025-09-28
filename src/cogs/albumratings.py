@@ -182,6 +182,11 @@ class AlbumRatings(commands.Cog):
             description="Instead of replying to the command here, send the embed to the rating channel without context.",
             default=True,
         ),  # type: ignore
+        ephemeral: discord.Option(
+            bool,
+            description="By default, the rating will only be viewable by you. Set to False to send as a chat reply.",
+            default=True,
+        ),  # type: ignore
     ):
         try:
             database = LocalDatabase()
@@ -200,7 +205,7 @@ class AlbumRatings(commands.Cog):
                 unpackedRating
             )
 
-            if send_to_rating_channel or ctx.channel_id == RATING_CHANNEL:
+            if send_to_rating_channel:
                 channel = self.bot.get_channel(RATING_CHANNEL)
 
                 if not channel:
@@ -227,7 +232,7 @@ class AlbumRatings(commands.Cog):
 
                 await reply.send(ctx, ephemeral=True)
             else:
-                await albumRatingEmbed.send(ctx)
+                await albumRatingEmbed.send(ctx, ephemeral=ephemeral)
         except Exception as e:
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
@@ -292,12 +297,17 @@ class AlbumRatings(commands.Cog):
             description="Instead of replying to the command here, send the embed to the rating channel without context.",
             default=True,
         ),  # type: ignore
+        edit_original_rating_message: discord.Option(
+            bool,
+            description="Instead of re-sending the updated rating message, update the original one.",
+            default=True,
+        ),  # type: ignore
     ):
         try:
             ratingChannel = self.bot.get_channel(RATING_CHANNEL)
 
-            if not ratingChannel and send_to_rating_channel:
-                raise Exception("The rating channel could not be found.\n\nSet send_to_rating_channel=False when using this command.")
+            if not ratingChannel and (send_to_rating_channel or edit_original_rating_message):
+                raise Exception("The rating channel could not be found.\n\nSet send_to_rating_channel=False and edit_original_rating_message=False when using this command.")
 
             database = LocalDatabase()
 
@@ -339,16 +349,28 @@ class AlbumRatings(commands.Cog):
             finishedRatingEmbed = music.AlbumRatingEmbedReply(unpackedRating)
 
             if send_to_rating_channel or ctx.channel_id == RATING_CHANNEL:
+                oldMessageNotFoundWarning: str = ""
+
+                oldMessageReference = None
+                
                 try:
                     oldMessageReference = await ratingChannel.fetch_message(oldMessageID)
-
-                    await oldMessageReference.delete()
                 except discord.errors.NotFound:
+                    oldMessageNotFoundWarning = "\n\n⚠️WARN: The original message tied to this rating could not be found and edit_original_rating_message was set to True when this command was invoked. Instead of editing the message, a new one was sent and can be found through the link above."
+
                     pass
                 
-                ratingMessageReference = await ratingChannel.send(
-                    embed=finishedRatingEmbed
-                )
+                if not oldMessageNotFoundWarning and edit_original_rating_message:
+                    ratingMessageReference = await oldMessageReference.edit(
+                        embed=finishedRatingEmbed
+                    )
+                else:
+                    if oldMessageReference:
+                        await oldMessageReference.delete()
+
+                    ratingMessageReference = await ratingChannel.send(
+                        embed=finishedRatingEmbed
+                    )
 
                 packedAlbumRating = unpackedRating.packAlbumRating(
                     ratingMessageReference
@@ -364,7 +386,7 @@ class AlbumRatings(commands.Cog):
                 )
 
                 savedReply = EmbedReply(
-                    "Album Ratings - Edited", "albumratings", description=f"Album rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}"
+                    "Album Ratings - Edited", "albumratings", description=f"Album rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}"
                 )
 
                 await msg.edit_original_response(
