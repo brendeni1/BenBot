@@ -21,11 +21,13 @@ SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 TIMEOUT_TO_PICK_ALBUM = 1 * (60)
 TIMEOUT_FOR_RATING_SELECT = 300 * (60)
 
-FAVOURITE_INDEX_OPTIONS = sorted([
-    1,
-    2,
-    3,
-])
+FAVOURITE_INDEX_OPTIONS = sorted(
+    [
+        1,
+        2,
+        3,
+    ]
+)
 
 COMMENT_LENGTH_CHARACTER_LIMIT = 1000
 COMMENT_LENGTH_CHARACTER_LIMIT_IN_EMBED = 100
@@ -36,11 +38,13 @@ spotifyClient = spotipy.Spotify(
     )
 )
 
+
 class Artist:
     def __init__(self, spotifyID: str, name: str, link: str):
         self.spotifyID = spotifyID
         self.name = name
         self.link = link
+
 
 class CancelConfirmView(discord.ui.View):
     def __init__(self, ratingView: "SongRatingView", embeds: list[discord.Embed]):
@@ -51,14 +55,13 @@ class CancelConfirmView(discord.ui.View):
 
     @discord.ui.button(label="Go Back", style=discord.ButtonStyle.secondary, emoji="⬅️")
     async def deny(self, button: discord.ui.Button, ctx: discord.Interaction):
-        await ctx.response.edit_message(
-            embeds=self.embeds,
-            view=self.ratingView
-        )
-        
+        await ctx.response.edit_message(embeds=self.embeds, view=self.ratingView)
+
         self.stop()
 
-    @discord.ui.button(label="Cancel Rating", style=discord.ButtonStyle.danger, emoji="⛔")
+    @discord.ui.button(
+        label="Cancel Rating", style=discord.ButtonStyle.danger, emoji="⛔"
+    )
     async def confirm(self, button: discord.ui.Button, ctx: discord.Interaction):
         reply = EmbedReply(
             "Album Rating - Cancelled",
@@ -67,37 +70,42 @@ class CancelConfirmView(discord.ui.View):
             description="Album rating cancelled.",
         )
 
-        await ctx.response.edit_message(
-            embed=reply,
-            view=None
-        )
+        await ctx.response.edit_message(embed=reply, view=None)
 
         self.ratingView.cancelled = True
 
         self.disable_all_items()
         self.stop()
 
+
 class CancelButton(discord.ui.Button):
     def __init__(self, **kwargs):
-        super().__init__(label="Cancel Rating", style=discord.ButtonStyle.danger, emoji="⛔", **kwargs)
+        super().__init__(
+            label="Cancel Rating",
+            style=discord.ButtonStyle.danger,
+            emoji="⛔",
+            **kwargs,
+        )
 
     async def callback(self, ctx: discord.ApplicationContext):
         cancelEmbed = EmbedReply(
             "Album Rating - Confirm Cancel",
             "albumratings",
-            description="Are you sure you want to cancel the album rating?"
+            description="Are you sure you want to cancel the album rating?",
         )
 
         await ctx.response.edit_message(
-            embed=cancelEmbed,
-            view=CancelConfirmView(self.view, ctx.message.embeds)
+            embed=cancelEmbed, view=CancelConfirmView(self.view, ctx.message.embeds)
         )
 
 
 class SaveRatingButton(discord.ui.Button):
     def __init__(self, **kwargs):
         super().__init__(
-            label="Finish Rating", style=discord.ButtonStyle.success, emoji="💾", **kwargs
+            label="Finish Rating",
+            style=discord.ButtonStyle.success,
+            emoji="💾",
+            **kwargs,
         )
 
     async def callback(self, ctx: discord.Interaction):
@@ -105,6 +113,7 @@ class SaveRatingButton(discord.ui.Button):
         self.view.stop()
 
         await ctx.response.defer()
+
 
 class NextTrackButton(discord.ui.Button):
     def __init__(self, **kwargs):
@@ -124,7 +133,10 @@ class NextTrackButton(discord.ui.Button):
 class PreviousTrackButton(discord.ui.Button):
     def __init__(self, **kwargs):
         super().__init__(
-            label="Previous Track", style=discord.ButtonStyle.primary, emoji="⬅️", **kwargs
+            label="Previous Track",
+            style=discord.ButtonStyle.primary,
+            emoji="⬅️",
+            **kwargs,
         )
 
     async def callback(self, ctx: discord.Interaction):
@@ -132,6 +144,7 @@ class PreviousTrackButton(discord.ui.Button):
         if view.index > 0:
             view.index -= 1
             await view.showTrackAndRating(ctx)
+
 
 class SongRatingView(discord.ui.View):
     def __init__(self, album: "Album", startIndex: int = 0):
@@ -155,21 +168,9 @@ class SongRatingView(discord.ui.View):
 
         self.add_item(SelectSongRating(track, row=0))
 
-        self.add_item(
-            EditCommentsButton(
-                "Edit Song Comments",
-                track,
-                row=2
-            )
-        )
+        self.add_item(EditCommentsButton("Edit Song Comments", track, row=2))
 
-        self.add_item(
-            EditCommentsButton(
-                "Edit Album Comments",
-                self.album,
-                row=2
-            )
-        )
+        self.add_item(EditCommentsButton("Edit Album Comments", self.album, row=2))
 
         if trackAmount > 1:
             currentFavouriteIndex = track.getFavouriteIndex()
@@ -182,7 +183,7 @@ class SongRatingView(discord.ui.View):
                         row=1,
                         disabled=(currentFavouriteIndex == indexOption)
                         or (trackAmount < indexOption)
-                        or track.getRating() == -1
+                        or track.getRating() == -1,
                     )
                 )
 
@@ -193,14 +194,17 @@ class SongRatingView(discord.ui.View):
                 ExcludeFromRatingButton(
                     track,
                     row=3,
-                    disabled=any([
-                        track.getRating() == -1,
-                        all(
-                            [
-                                trackReLoop.getRating() == -1
-                                for trackReLoop in self.album.tracks if trackReLoop != track
-                            ]
-                        )]
+                    disabled=any(
+                        [
+                            track.getRating() == -1,
+                            all(
+                                [
+                                    trackReLoop.getRating() == -1
+                                    for trackReLoop in self.album.tracks
+                                    if trackReLoop != track
+                                ]
+                            ),
+                        ]
                     ),
                 )
             )
@@ -260,7 +264,7 @@ class SelectSongRating(discord.ui.Select):
                 )
                 for i in scale
             ],
-            **kwargs
+            **kwargs,
         )
 
     async def callback(self, ctx: discord.Interaction):
@@ -269,6 +273,7 @@ class SelectSongRating(discord.ui.Select):
         self.track.setRating(float(self.values[0]))
 
         await view.showTrackAndRating(ctx)
+
 
 class Track:
     def __init__(
@@ -344,17 +349,25 @@ class Track:
         else:
             return self.rating
 
+
 class FavouriteButton(discord.ui.Button):
     def __init__(self, ranking: int, track: Track, **kwargs):
         self.track = track
         self.ranking = ranking
 
-        medal = constants.RANKING_MEDALS[str(ranking)] if str(ranking) in constants.RANKING_MEDALS else None
-        
+        medal = (
+            constants.RANKING_MEDALS[str(ranking)]
+            if str(ranking) in constants.RANKING_MEDALS
+            else None
+        )
+
         ordinized = text.ordinal(ranking)
 
         super().__init__(
-            label=f"{ordinized} Place", style=discord.ButtonStyle.secondary, emoji=medal, **kwargs
+            label=f"{ordinized} Place",
+            style=discord.ButtonStyle.secondary,
+            emoji=medal,
+            **kwargs,
         )
 
     async def callback(self, ctx: discord.Interaction):
@@ -363,17 +376,21 @@ class FavouriteButton(discord.ui.Button):
         for track in view.album.tracks:
             if track.getFavouriteIndex() == self.ranking:
                 track.setFavouriteIndex(None)
-        
+
         self.track.setFavouriteIndex(self.ranking)
-        
+
         await view.showTrackAndRating(ctx)
+
 
 class ExcludeFromRatingButton(discord.ui.Button):
     def __init__(self, track: Track, **kwargs):
         self.track = track
-        
+
         super().__init__(
-            label=f"Exclude From Rating", style=discord.ButtonStyle.secondary, emoji="↪️", **kwargs
+            label=f"Exclude From Rating",
+            style=discord.ButtonStyle.secondary,
+            emoji="↪️",
+            **kwargs,
         )
 
     async def callback(self, ctx: discord.Interaction):
@@ -381,23 +398,28 @@ class ExcludeFromRatingButton(discord.ui.Button):
 
         self.track.setRating(-1)
         self.track.setFavouriteIndex(None)
-        
+
         await view.showTrackAndRating(ctx)
+
 
 class ClearFavouriteButton(discord.ui.Button):
     def __init__(self, track: Track, **kwargs):
         self.track = track
 
         super().__init__(
-            label=f"Unfavourite", style=discord.ButtonStyle.secondary, emoji="🗑️", **kwargs
+            label=f"Unfavourite",
+            style=discord.ButtonStyle.secondary,
+            emoji="🗑️",
+            **kwargs,
         )
 
     async def callback(self, ctx: discord.Interaction):
         view: SongRatingView = self.view
 
         self.track.setFavouriteIndex(None)
-        
+
         await view.showTrackAndRating(ctx)
+
 
 class TrackRatingEmbedReply(EmbedReply):
     def __init__(self, track: Track):
@@ -420,7 +442,11 @@ class TrackRatingEmbedReply(EmbedReply):
 
         favouriteIndex = track.getFavouriteIndex()
 
-        medalFormatted = f"{constants.RANKING_MEDALS[str(favouriteIndex)]} {text.ordinal(favouriteIndex)} Place" if favouriteIndex in FAVOURITE_INDEX_OPTIONS else "*(Not Favourited)*"
+        medalFormatted = (
+            f"{constants.RANKING_MEDALS[str(favouriteIndex)]} {text.ordinal(favouriteIndex)} Place"
+            if favouriteIndex in FAVOURITE_INDEX_OPTIONS
+            else "*(Not Favourited)*"
+        )
 
         if track.album.totalTracks() > 1:
             self.add_field(
@@ -474,7 +500,7 @@ class Album:
 
     def updateEditedTime(self) -> datetime:
         timestamp = dates.simpleDateObj(timeNow=True)
-        
+
         self.editedAt = timestamp
 
         return timestamp
@@ -512,11 +538,17 @@ class Album:
 
     def packAlbumRating(self, lastRelatedMessage: discord.Message) -> tuple:
         ratingID: str = self.ratingID
-        
+
         createdBy: int = self.createdBy.id
-        
-        createdAt: str = dates.formatSimpleDate(self.createdAt)
-        editedAt: str | None = dates.formatSimpleDate(self.editedAt) if self.editedAt else None
+
+        createdAt: str = dates.formatSimpleDate(
+            self.createdAt, formatString="%Y-%m-%d %H:%M:%S"
+        )
+        editedAt: str | None = (
+            dates.formatSimpleDate(self.editedAt, formatString="%Y-%m-%d %H:%M:%S")
+            if self.editedAt
+            else None
+        )
 
         ratingArtist: str = self.getArtists(True)
         ratingAlbum: str = self.name
@@ -527,7 +559,17 @@ class Album:
         self.createdBy = self.createdBy.id
         serializedRating = pickle.dumps(self)
 
-        return (ratingID, createdBy, createdAt, editedAt, ratingArtist, ratingAlbum, formattedRating, lastRelatedMessage, serializedRating)
+        return (
+            ratingID,
+            createdBy,
+            createdAt,
+            editedAt,
+            ratingArtist,
+            ratingAlbum,
+            formattedRating,
+            lastRelatedMessage,
+            serializedRating,
+        )
 
     def addTrack(self, track: Track):
         track.album = self
@@ -566,16 +608,18 @@ class Album:
                 f"releaseYear: Invalid release year! Rating ID: {self.ratingID}"
             )
 
+
 class EditCommentsButton(discord.ui.Button):
     def __init__(self, label: str, obj: Album | Track, **kwargs):
         self.obj = obj
-        
+
         super().__init__(
             label=label, style=discord.ButtonStyle.secondary, emoji="💬", **kwargs
         )
 
     async def callback(self, ctx: discord.ApplicationContext):
         await ctx.response.send_modal(EditCommentsModal(self.obj, self.view))
+
 
 class AlbumRatingEmbedReply(EmbedReply):
     def __init__(self, album: Album):
@@ -594,28 +638,43 @@ class AlbumRatingEmbedReply(EmbedReply):
         for track in album.tracks:
             favouriteIndex = track.getFavouriteIndex()
 
-            medal = f" {constants.RANKING_MEDALS[str(favouriteIndex)] if str(favouriteIndex) in constants.RANKING_MEDALS else f'({text.ordinal(favouriteIndex)} Place)'} " if favouriteIndex else ""
+            medal = (
+                f" {constants.RANKING_MEDALS[str(favouriteIndex)] if str(favouriteIndex) in constants.RANKING_MEDALS else f'({text.ordinal(favouriteIndex)} Place)'} "
+                if favouriteIndex
+                else " "
+            )
 
             comments = track.parseComments()
-            
-            formattedComments = f"\n\u00A0\u00A0\u00A0\u00A0⤷ 💬 {text.truncateString(comments, COMMENT_LENGTH_CHARACTER_LIMIT_IN_EMBED)[0]}" if comments else ""
-                
-            self.description += (
-                f"**{track.trackNumber}.**{medal}{track.name} · `{track.getRating(True)}`{formattedComments}\n"
+
+            formattedComments = (
+                f"\n\u00a0\u00a0\u00a0\u00a0⤷ 💬 {text.truncateString(comments, COMMENT_LENGTH_CHARACTER_LIMIT_IN_EMBED)[0]}"
+                if comments
+                else ""
             )
+
+            self.description += f"**{track.trackNumber}.**{medal}{track.name} · `{track.getRating(True)}`{formattedComments}\n"
 
         self.add_field(
             name="***Overall Album Rating***",
             value=f"`{album.meanRating(True)}`",
-            inline=True,
+            inline=False,
         )
-        self.add_field(
-            name="***Album Rating By***", value=album.createdBy.mention, inline=True
-        )
+
         self.add_field(
             name="***Album Rated On***",
-            value=f"{dates.formatSimpleDate(album.createdAt)}",
+            value=f"{dates.formatSimpleDate(album.createdAt, discordDateFormat="f")}",
             inline=True,
+        )
+
+        if album.editedAt:
+            self.add_field(
+                name="***Rating Edited***",
+                value=f"{dates.formatSimpleDate(album.editedAt, discordDateFormat="f")}",
+                inline=True,
+            )
+
+        self.add_field(
+            name="***Album Rating By***", value=album.createdBy.mention, inline=True
         )
 
         self.add_field(
@@ -628,17 +687,23 @@ class AlbumRatingEmbedReply(EmbedReply):
 
 
 class EditCommentsModal(discord.ui.Modal):
-    def __init__(self, obj: Album | Track, view: SongRatingView, *args, **kwargs) -> None:
+    def __init__(
+        self, obj: Album | Track, view: SongRatingView, *args, **kwargs
+    ) -> None:
         self.obj = obj
         self.view = view
 
-        super().__init__(title=text.truncateString(f"Comments On {obj.name}", 45)[0], *args, **kwargs)
+        super().__init__(
+            title=text.truncateString(f"Comments On {obj.name}", 45)[0], *args, **kwargs
+        )
 
         self.add_item(
             discord.ui.InputText(
                 style=discord.InputTextStyle.paragraph,
-                label="Edit Comments", max_length=COMMENT_LENGTH_CHARACTER_LIMIT, value=obj.parseComments(),
-                required=False
+                label="Edit Comments",
+                max_length=COMMENT_LENGTH_CHARACTER_LIMIT,
+                value=obj.parseComments(),
+                required=False,
             )
         )
 
@@ -647,8 +712,9 @@ class EditCommentsModal(discord.ui.Modal):
             self.obj.setComments(None)
         else:
             self.obj.setComments(self.children[0].value)
-        
+
         await self.view.showTrackAndRating(ctx)
+
 
 class SelectAlbum(discord.ui.Select):
     def __init__(self, choices: list[tuple]):
@@ -663,7 +729,7 @@ class SelectAlbum(discord.ui.Select):
                 )
                 for choice in choices
             ],
-            row=0
+            row=0,
         )
 
     async def callback(self, ctx: discord.Interaction):
@@ -671,8 +737,9 @@ class SelectAlbum(discord.ui.Select):
 
         self.view.disable_all_items()
         self.view.stop()
-        
+
         await ctx.response.defer()
+
 
 class ChooseAlbumView(discord.ui.View):
     def __init__(self, choices: list[tuple]):
@@ -776,3 +843,11 @@ def parseAlbumDetails(
         album.addTrack(track)
 
     return album
+
+
+def unpackAlbumRating(bot: discord.Bot, packedAlbumRating: bytes) -> Album:
+    unserializedAlbumRating: Album = pickle.loads(packedAlbumRating)
+
+    unserializedAlbumRating.createdBy = bot.get_user(unserializedAlbumRating.createdBy)
+
+    return unserializedAlbumRating
