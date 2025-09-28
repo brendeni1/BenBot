@@ -8,30 +8,32 @@ from src.utils import dates
 
 RATING_CHANNEL = 946507420916678688
 
-def paginateRatingList(results: list[tuple], title: str, description: str) -> list[pages.Page]:
-    pageList = []
-    
-    for chunk in range(0, len(results), 25):
-        page = EmbedReply(
-            title,
-            "albumratings",
-            description=description
-        )
 
-        for result in results[chunk:chunk + 25]:
-            formattedCreatedAt = dates.formatSimpleDate(result[2], discordDateFormat="d")
-            
-            formattedRatingName = text.truncateString(f"{result[5]} · {result[4]} · {formattedCreatedAt}", 256)[0]
+def paginateRatingList(
+    results: list[tuple], title: str, description: str
+) -> list[pages.Page]:
+    pageList = []
+
+    for chunk in range(0, len(results), 25):
+        page = EmbedReply(title, "albumratings", description=description)
+
+        for result in results[chunk : chunk + 25]:
+            formattedCreatedAt = dates.formatSimpleDate(
+                result[2], discordDateFormat="d"
+            )
+
+            formattedRatingName = text.truncateString(
+                f"{result[5]} · {result[4]} · {formattedCreatedAt}", 256
+            )[0]
 
             page.add_field(
-                name=formattedRatingName,
-                value=f"Rating ID: {result[0]}",
-                inline=False
+                name=formattedRatingName, value=f"Rating ID: {result[0]}", inline=False
             )
 
         pageList.append(page)
-    
+
     return pageList
+
 
 class AlbumRatings(commands.Cog):
     ISCOG = True
@@ -48,7 +50,8 @@ class AlbumRatings(commands.Cog):
     )
 
     @albumRatings.command(
-        description="Use this command to create a new album rating.", guild_ids=[799341195109203998]
+        description="Use this command to create a new album rating.",
+        guild_ids=[799341195109203998],
     )
     async def create(
         self,
@@ -134,7 +137,10 @@ class AlbumRatings(commands.Cog):
                 ratingChannel = ctx.channel
 
             displayedAlbumReviewMessage: discord.Message = await ratingChannel.send(
-                embed=finishedRatingEmbed
+                embed=finishedRatingEmbed,
+                view=music.FinishedRatingPersistentMessageButtonsView(
+                    parsedAlbumDetails.link
+                ),
             )
 
             packedAlbumRating = parsedAlbumDetails.packAlbumRating(
@@ -149,25 +155,26 @@ class AlbumRatings(commands.Cog):
                 (`ratingID`, `createdBy`, `createdAt`, `editedAt`, `ratingArtist`, `ratingAlbum`, `formattedRating`, `lastRelatedMessage`, `serializedRating`) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                packedAlbumRating
+                packedAlbumRating,
             )
 
             savedReply = EmbedReply(
-                "Album Ratings - Saved", "albumratings", description=f"Album rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}"
+                "Album Ratings - Saved",
+                "albumratings",
+                description=f"Album rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}",
             )
 
-            await msg.edit_original_response(
-                embed=savedReply, view=None
-            )
+            await msg.edit_original_response(embed=savedReply, view=None)
         except Exception as e:
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
 
             await reply.send(ctx, ephemeral=True)
-    
+
     @albumRatings.command(
-        description="View an album rating (by Rating ID).", guild_ids=[799341195109203998]
+        description="View an album rating (by Rating ID).",
+        guild_ids=[799341195109203998],
     )
     async def view(
         self,
@@ -191,43 +198,53 @@ class AlbumRatings(commands.Cog):
         try:
             database = LocalDatabase()
 
-            targetRating = database.get("SELECT * FROM albumRatings WHERE ratingID = ?", (id,))
+            targetRating = database.get(
+                "SELECT * FROM albumRatings WHERE ratingID = ?", (id,)
+            )
 
             if not targetRating:
-                raise Exception("There were no ratings with that ID found!\n\nTry using the list command to narrow down your search.")
-            
+                raise Exception(
+                    "There were no ratings with that ID found!\n\nTry using the list command to narrow down your search."
+                )
+
             packedRating = targetRating[0]
             oldMessageID = packedRating[7]
 
             unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
 
-            albumRatingEmbed = music.AlbumRatingEmbedReply(
-                unpackedRating
-            )
+            albumRatingEmbed = music.AlbumRatingEmbedReply(unpackedRating)
 
             if send_to_rating_channel:
                 channel = self.bot.get_channel(RATING_CHANNEL)
 
                 if not channel:
-                    raise Exception("The rating channel could not be found.\n\nSet send_to_rating_channel=False when using this command.")
-                
+                    raise Exception(
+                        "The rating channel could not be found.\n\nSet send_to_rating_channel=False when using this command."
+                    )
+
                 try:
                     oldMessageReference = await channel.fetch_message(oldMessageID)
 
                     await oldMessageReference.delete()
                 except discord.errors.NotFound:
                     pass
-                
+
                 ratingMessageReference = await channel.send(
-                    embed=albumRatingEmbed
+                    embed=albumRatingEmbed,
+                    view=music.FinishedRatingPersistentMessageButtonsView(
+                        unpackedRating.link
+                    ),
                 )
 
-                database.setOne("UPDATE albumRatings SET lastRelatedMessage = ? WHERE ratingID = ?", (ratingMessageReference.id, id))
+                database.setOne(
+                    "UPDATE albumRatings SET lastRelatedMessage = ? WHERE ratingID = ?",
+                    (ratingMessageReference.id, id),
+                )
 
                 reply = EmbedReply(
                     "Album Ratings - View ID",
                     "albumratings",
-                    description=f"Successfully retrieved rating for {unpackedRating.name}. ✅\n\nView here: {ratingMessageReference.jump_url}"
+                    description=f"Successfully retrieved rating for {unpackedRating.name}. ✅\n\nView here: {ratingMessageReference.jump_url}",
                 )
 
                 await reply.send(ctx, ephemeral=True)
@@ -240,7 +257,11 @@ class AlbumRatings(commands.Cog):
 
             await reply.send(ctx, ephemeral=True)
 
-    list_ratings = albumRatings.create_subgroup("list", "Use these commands to list ratings based on metrics.", guild_ids=[799341195109203998])
+    list_ratings = albumRatings.create_subgroup(
+        "list",
+        "Use these commands to list ratings based on metrics.",
+        guild_ids=[799341195109203998],
+    )
 
     @list_ratings.command(
         description="List album ratings (by Member).", guild_ids=[799341195109203998]
@@ -251,20 +272,29 @@ class AlbumRatings(commands.Cog):
         member: discord.Option(
             discord.Member,
             description="Provide the guild member to inquiry ratings for.",
-            required=True
-        ) # type: ignore
+            required=True,
+        ),  # type: ignore
     ):
         member: discord.Member = member
 
         try:
             database = LocalDatabase()
 
-            results = database.get("SELECT * FROM albumRatings WHERE createdBy = ? ORDER BY createdAt DESC", (member.id,))
+            results = database.get(
+                "SELECT * FROM albumRatings WHERE createdBy = ? ORDER BY createdAt DESC",
+                (member.id,),
+            )
 
             if not results:
-                raise Exception(f"The user {member.mention} does not have any ratings yet!\n\nGet started with /albumratings create.")
-            
-            pageList = paginateRatingList(results, "Album Ratings - List By Member", f"List of ratings for {member.mention}.")
+                raise Exception(
+                    f"The user {member.mention} does not have any ratings yet!\n\nGet started with /albumratings create."
+                )
+
+            pageList = paginateRatingList(
+                results,
+                "Album Ratings - List By Member",
+                f"List of ratings for {member.mention}.",
+            )
 
             pagignator = pages.Paginator(
                 pages=pageList,
@@ -276,13 +306,14 @@ class AlbumRatings(commands.Cog):
                 "Album Ratings - List By Member",
                 "albumratings",
                 True,
-                description=str(e)
+                description=str(e),
             )
 
             await reply.send(ctx, ephemeral=True)
 
     @albumRatings.command(
-        description="Edit an album rating (by Rating ID).", guild_ids=[799341195109203998]
+        description="Edit an album rating (by Rating ID).",
+        guild_ids=[799341195109203998],
     )
     async def edit(
         self,
@@ -306,23 +337,35 @@ class AlbumRatings(commands.Cog):
         try:
             ratingChannel = self.bot.get_channel(RATING_CHANNEL)
 
-            if not ratingChannel and (send_to_rating_channel or edit_original_rating_message):
-                raise Exception("The rating channel could not be found.\n\nSet send_to_rating_channel=False and edit_original_rating_message=False when using this command.")
+            if not ratingChannel and (
+                send_to_rating_channel or edit_original_rating_message
+            ):
+                raise Exception(
+                    "The rating channel could not be found.\n\nSet send_to_rating_channel=False and edit_original_rating_message=False when using this command."
+                )
 
             database = LocalDatabase()
 
-            targetRating = database.get("SELECT * FROM albumRatings WHERE ratingID = ?", (id,))
+            targetRating = database.get(
+                "SELECT * FROM albumRatings WHERE ratingID = ?", (id,)
+            )
 
             if not targetRating:
-                raise Exception("There were no ratings with that ID found!\n\nTry using the list command to narrow down your search.")
-            
+                raise Exception(
+                    "There were no ratings with that ID found!\n\nTry using the list command to narrow down your search."
+                )
+
             packedRating = targetRating[0]
             oldMessageID = packedRating[7]
             createdByID = packedRating[1]
             invokedBy: discord.User = ctx.user
 
-            if (createdByID != invokedBy.id) and not (await self.bot.is_owner(invokedBy)):
-                raise Exception(f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`")
+            if (createdByID != invokedBy.id) and not (
+                await self.bot.is_owner(invokedBy)
+            ):
+                raise Exception(
+                    f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`"
+                )
 
             unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
 
@@ -352,17 +395,22 @@ class AlbumRatings(commands.Cog):
                 oldMessageNotFoundWarning: str = ""
 
                 oldMessageReference = None
-                
+
                 try:
-                    oldMessageReference = await ratingChannel.fetch_message(oldMessageID)
+                    oldMessageReference = await ratingChannel.fetch_message(
+                        oldMessageID
+                    )
                 except discord.errors.NotFound:
                     oldMessageNotFoundWarning = "\n\n⚠️WARN: The original message tied to this rating could not be found and edit_original_rating_message was set to True when this command was invoked. Instead of editing the message, a new one was sent and can be found through the link above."
 
                     pass
-                
+
                 if not oldMessageNotFoundWarning and edit_original_rating_message:
                     ratingMessageReference = await oldMessageReference.edit(
-                        embed=finishedRatingEmbed
+                        embed=finishedRatingEmbed,
+                        view=music.FinishedRatingPersistentMessageButtonsView(
+                            unpackedRating.link
+                        ),
                     )
                 else:
                     if oldMessageReference:
@@ -382,24 +430,28 @@ class AlbumRatings(commands.Cog):
                     SET editedAt = ?, ratingArtist = ?, ratingAlbum = ?, formattedRating = ?, lastRelatedMessage = ?, serializedRating = ?
                     WHERE ratingID = ?
                     """,
-                    (packedAlbumRating[3], packedAlbumRating[4], packedAlbumRating[5], packedAlbumRating[6], packedAlbumRating[7], packedAlbumRating[8], id)
+                    (
+                        packedAlbumRating[3],
+                        packedAlbumRating[4],
+                        packedAlbumRating[5],
+                        packedAlbumRating[6],
+                        packedAlbumRating[7],
+                        packedAlbumRating[8],
+                        id,
+                    ),
                 )
 
                 savedReply = EmbedReply(
-                    "Album Ratings - Edited", "albumratings", description=f"Album rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}"
+                    "Album Ratings - Edited",
+                    "albumratings",
+                    description=f"Album rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}",
                 )
 
-                await msg.edit_original_response(
-                    embed=savedReply, view=None
-                )
+                await msg.edit_original_response(embed=savedReply, view=None)
             else:
-                await msg.edit_original_response(
-                    embed=finishedRatingEmbed, view=None
-                )
+                await msg.edit_original_response(embed=finishedRatingEmbed, view=None)
 
-                packedAlbumRating = unpackedRating.packAlbumRating(
-                    msg
-                )
+                packedAlbumRating = unpackedRating.packAlbumRating(msg)
 
                 database.setOne(
                     """
@@ -407,7 +459,14 @@ class AlbumRatings(commands.Cog):
                     SET editedAt = ?, ratingArtist = ?, ratingAlbum = ?, formattedRating = ?, serializedRating = ?
                     WHERE ratingID = ?
                     """,
-                    (packedAlbumRating[3], packedAlbumRating[4], packedAlbumRating[5], packedAlbumRating[6], packedAlbumRating[8], id)
+                    (
+                        packedAlbumRating[3],
+                        packedAlbumRating[4],
+                        packedAlbumRating[5],
+                        packedAlbumRating[6],
+                        packedAlbumRating[8],
+                        id,
+                    ),
                 )
         except Exception as e:
             reply = EmbedReply(
@@ -417,7 +476,8 @@ class AlbumRatings(commands.Cog):
             await reply.send(ctx, ephemeral=True)
 
     @albumRatings.command(
-        description="Delete an album rating (by Rating ID).", guild_ids=[799341195109203998]
+        description="Delete an album rating (by Rating ID).",
+        guild_ids=[799341195109203998],
     )
     async def delete(
         self,
@@ -436,45 +496,51 @@ class AlbumRatings(commands.Cog):
         try:
             database = LocalDatabase()
 
-            targetRating = database.get("SELECT * FROM albumRatings WHERE ratingID = ?", (id,))
+            targetRating = database.get(
+                "SELECT * FROM albumRatings WHERE ratingID = ?", (id,)
+            )
 
             if not targetRating:
-                raise Exception("There were no ratings with that ID found!\n\nTry using the list command to narrow down your search.")
-            
+                raise Exception(
+                    "There were no ratings with that ID found!\n\nTry using the list command to narrow down your search."
+                )
+
             packedRating = targetRating[0]
             oldMessageID = packedRating[7]
             createdByID = packedRating[1]
             invokedBy: discord.User = ctx.user
 
-            if (createdByID != invokedBy.id) and not (await self.bot.is_owner(invokedBy)):
-                raise Exception(f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`")
+            if (createdByID != invokedBy.id) and not (
+                await self.bot.is_owner(invokedBy)
+            ):
+                raise Exception(
+                    f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`"
+                )
 
             unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
 
-            albumRatingEmbed = music.AlbumRatingEmbedReply(
-                unpackedRating
+            formattedCreatedAt = dates.formatSimpleDate(
+                unpackedRating.createdAt, discordDateFormat="d"
             )
-
-            formattedCreatedAt = dates.formatSimpleDate(unpackedRating.createdAt, discordDateFormat="d")
-            prettyAlbumName = text.truncateString(f"{unpackedRating.name} · {unpackedRating.getArtists(True)} · {formattedCreatedAt}", 256)[0]
+            prettyAlbumName = text.truncateString(
+                f"{unpackedRating.name} · {unpackedRating.getArtists(True)} · {formattedCreatedAt}",
+                256,
+            )[0]
 
             confirmationReplyEmbed = EmbedReply(
                 "Album Ratings - Delete",
                 "albumratings",
-                description="Are you sure you want to delete the following rating?"
+                description="Are you sure you want to delete the following rating?",
             )
 
             confirmationReplyEmbed.add_field(
-                name=prettyAlbumName,
-                value=f"Rating ID: {unpackedRating.ratingID}"
+                name=prettyAlbumName, value=f"Rating ID: {unpackedRating.ratingID}"
             )
 
             confirmationReplyView = music.DeleteRatingView()
 
             confirmationReply = await ctx.respond(
-                embed = confirmationReplyEmbed,
-                view = confirmationReplyView,
-                ephemeral=True
+                embed=confirmationReplyEmbed, view=confirmationReplyView, ephemeral=True
             )
 
             timedOut = await confirmationReplyView.wait()
@@ -484,16 +550,13 @@ class AlbumRatings(commands.Cog):
                     "Album Ratings - Delete",
                     "albumratings",
                     True,
-                    description="You ran out of time to delete the rating. Please try again."
+                    description="You ran out of time to delete the rating. Please try again.",
                 )
 
-                await confirmationReply.edit_original_response(
-                    embed=reply,
-                    view=None
-                )
+                await confirmationReply.edit_original_response(embed=reply, view=None)
 
                 return
-            
+
             if not confirmationReplyView.confirmDelete:
                 await confirmationReply.delete_original_response()
 
@@ -503,7 +566,9 @@ class AlbumRatings(commands.Cog):
                 channel = self.bot.get_channel(RATING_CHANNEL)
 
                 if not channel:
-                    raise Exception("The rating channel could not be found.\n\nSet delete_rating_message=False when using this command.")
+                    raise Exception(
+                        "The rating channel could not be found.\n\nSet delete_rating_message=False when using this command."
+                    )
 
                 try:
                     oldMessageReference = await channel.fetch_message(oldMessageID)
@@ -513,28 +578,25 @@ class AlbumRatings(commands.Cog):
                     pass
 
             database.setOne("DELETE FROM albumRatings WHERE ratingID = ?", (id,))
-            
+
             reply = EmbedReply(
                 "Album Ratings - View ID",
                 "albumratings",
-                description=f"Successfully deleted rating. ✅"
+                description=f"Successfully deleted rating. ✅",
             )
 
             reply.add_field(
-                name=prettyAlbumName,
-                value=f"Rating ID: {unpackedRating.ratingID}"
+                name=prettyAlbumName, value=f"Rating ID: {unpackedRating.ratingID}"
             )
 
-            await confirmationReply.edit_original_response(
-                embed=reply,
-                view=None
-            )
+            await confirmationReply.edit_original_response(embed=reply, view=None)
         except Exception as e:
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
 
             await reply.send(ctx, ephemeral=True)
+
 
 def setup(bot):
     currentFile = sys.modules[__name__]

@@ -38,11 +38,20 @@ spotifyClient = spotipy.Spotify(
     )
 )
 
+
 class Artist:
     def __init__(self, spotifyID: str, name: str, link: str):
         self.spotifyID = spotifyID
         self.name = name
         self.link = link
+
+
+class FinishedRatingPersistentMessageButtonsView(discord.ui.View):
+    def __init__(self, *, albumLink: str = None):
+        super().__init__(timeout=None)
+
+        self.add_item(OpenLink("Open Album on Spotify", albumLink))
+
 
 class DeleteRatingView(discord.ui.View):
     def __init__(self):
@@ -50,19 +59,26 @@ class DeleteRatingView(discord.ui.View):
         self.confirmDelete: bool = False
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancelButton(self, button: discord.ui.Button, interaction: discord.Interaction):
-        
+    async def cancelButton(
+        self, button: discord.ui.Button, interaction: discord.Interaction
+    ):
+
         self.stop()
-        
+
         await interaction.response.defer()
 
-    @discord.ui.button(label="Delete Rating", style=discord.ButtonStyle.danger, emoji="🗑️")
-    async def deleteButton(self, button: discord.ui.Button, interaction: discord.Interaction):
+    @discord.ui.button(
+        label="Delete Rating", style=discord.ButtonStyle.danger, emoji="🗑️"
+    )
+    async def deleteButton(
+        self, button: discord.ui.Button, interaction: discord.Interaction
+    ):
         self.confirmDelete = True
-        
+
         self.stop()
-        
+
         await interaction.response.defer()
+
 
 class CancelConfirmView(discord.ui.View):
     def __init__(self, ratingView: "SongRatingView", embeds: list[discord.Embed]):
@@ -302,6 +318,7 @@ class Track:
         explicit: bool,
         link: str,
         trackNumber: int,
+        discNumber: int,
         durationMS: int,
         rating: float = None,
         favouriteIndex: int | None = None,
@@ -314,11 +331,20 @@ class Track:
         self.explicit = explicit
         self.link = link
         self.trackNumber = trackNumber
+        self.discNumber = discNumber
         self.durationMS = durationMS
         self.rating = rating
         self.favouriteIndex = favouriteIndex
         self.comments = comments
         self.album = album
+
+    def getTrackNumber(self, relativeToDisk: bool = False) -> int:
+        if relativeToDisk:
+            return self.trackNumber
+        
+        trackNumber = self.album.tracks.index(self, start = 1)
+
+        return trackNumber
 
     def setRating(self, rating: float) -> None:
         self.rating = rating
@@ -443,7 +469,16 @@ class TrackRatingEmbedReply(EmbedReply):
     def __init__(self, track: Track):
         formattedArtists: str = track.getArtists(True)
 
-        title = f"({track.trackNumber}/{track.album.totalTracks()})  👤 {formattedArtists} ⏯️ {track.name} 🔗↗️"
+        positionString = ""
+
+        allDiscs: list[int] = track.album.getAllDiscNumbers()
+
+        if len(allDiscs) > 1:
+            positionString = f"Disc {track.discNumber}/{len(allDiscs)} · Track {track.trackNumber}/{len(track.album.getTracksOnDisc(track.discNumber))} ({track.album.totalTracks()} Total)"
+        else:
+            positionString = f"Track {track.trackNumber}/{track.album.totalTracks()}"
+
+        title = f"{positionString} 👤 {formattedArtists} ⏯️ {track.name} 🔗↗️"
         super().__init__(
             title,
             "albumratings",
@@ -518,8 +553,32 @@ class Album:
             filteredTracks = [track for track in self.tracks if track.getRating() != -1]
 
             return len(filteredTracks)
-        
+
         return len(self.tracks)
+
+    def getAllDiscNumbers(self) -> list[int]:
+        if not self.tracks:
+            raise ValueError("There are no tracks for this album and the discs could not be processed.")
+        
+        discs = []
+        
+        for track in self.tracks:
+            if track.discNumber in discs:
+                continue
+            
+            discs.append(track.discNumber)
+        
+        discs.sort()
+
+        return discs
+    
+    def getTracksOnDisc(self, targetDisc: int) -> list[Track]:
+        if targetDisc not in self.getAllDiscNumbers():
+            raise ValueError("gettracksondisc: Disc index out of range!")
+        
+        filteredTracks: list[Track] = [track for track in self.tracks if track.discNumber == targetDisc]
+
+        return filteredTracks
 
     def updateEditedTime(self) -> datetime:
         timestamp = dates.simpleDateObj(timeNow=True)
@@ -648,7 +707,7 @@ class AlbumRatingEmbedReply(EmbedReply):
     def __init__(self, album: Album):
         formattedArtists: str = album.getArtists(True)
 
-        title = f"👤 {formattedArtists} 💿 {album.name} 📅 {album.releaseYear(True, True)} 🔗↗️"
+        title = f"👤 {formattedArtists} 💽 {album.name} 📅 {album.releaseYear(True, True)} 🔗↗️"
         super().__init__(title, "albumratings", url=album.link, description="")
 
         self.set_thumbnail(url=album.coverImage)
@@ -657,6 +716,10 @@ class AlbumRatingEmbedReply(EmbedReply):
             text=f"Album data provided by Spotify®. Rating ID: {album.ratingID}",
             icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png",
         )
+
+        seenDiscs = set()
+
+        allDiscs: list[int] = album.getAllDiscNumbers()
 
         for track in album.tracks:
             favouriteIndex = track.getFavouriteIndex()
@@ -675,7 +738,14 @@ class AlbumRatingEmbedReply(EmbedReply):
                 else ""
             )
 
-            self.description += f"**{track.trackNumber}.**{medal}{track.name} · `{track.getRating(True)}`{formattedComments}\n"
+            discString = ""
+
+            if len(allDiscs) > 1 and (track.discNumber not in seenDiscs):
+                discString = f"{'' if track.discNumber == 1 else '\u00a0'}\n***💿 Disc {track.discNumber}***\n"
+
+                seenDiscs.add(track.discNumber)
+
+            self.description += f"{discString}**{track.trackNumber}.**{medal}{track.name} · `{track.getRating(True)}`{formattedComments}\n"
 
         self.add_field(
             name="***Overall Album Rating***",
@@ -860,6 +930,7 @@ def parseAlbumDetails(
             trackData["explicit"],
             trackData["external_urls"]["spotify"],
             trackData["track_number"],
+            trackData["disc_number"],
             trackData["duration_ms"],
         )
 
