@@ -38,13 +38,31 @@ spotifyClient = spotipy.Spotify(
     )
 )
 
-
 class Artist:
     def __init__(self, spotifyID: str, name: str, link: str):
         self.spotifyID = spotifyID
         self.name = name
         self.link = link
 
+class DeleteRatingView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=30)
+        self.confirmDelete: bool = False
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancelButton(self, button: discord.ui.Button, interaction: discord.Interaction):
+        
+        self.stop()
+        
+        await interaction.response.defer()
+
+    @discord.ui.button(label="Delete Rating", style=discord.ButtonStyle.danger, emoji="🗑️")
+    async def deleteButton(self, button: discord.ui.Button, interaction: discord.Interaction):
+        self.confirmDelete = True
+        
+        self.stop()
+        
+        await interaction.response.defer()
 
 class CancelConfirmView(discord.ui.View):
     def __init__(self, ratingView: "SongRatingView", embeds: list[discord.Embed]):
@@ -495,7 +513,12 @@ class Album:
         self.coverImageColour = coverImageColour
         self.comments = comments
 
-    def totalTracks(self) -> int:
+    def totalTracks(self, includeSkipped: bool = True) -> int:
+        if not includeSkipped:
+            filteredTracks = [track for track in self.tracks if track.getRating() != -1]
+
+            return len(filteredTracks)
+        
         return len(self.tracks)
 
     def updateEditedTime(self) -> datetime:

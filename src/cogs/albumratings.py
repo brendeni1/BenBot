@@ -66,7 +66,7 @@ class AlbumRatings(commands.Cog):
                 raise Exception("No albums were found with that name!")
 
             reply = EmbedReply(
-                "Album Rating - Choose Album",
+                "Album Ratings - Choose Album",
                 "albumratings",
                 description="Choose the album you wish to rate from the Spotify results below.",
             )
@@ -153,7 +153,7 @@ class AlbumRatings(commands.Cog):
             )
 
             savedReply = EmbedReply(
-                "Album Rating - Saved", "albumratings", description=f"Album rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}"
+                "Album Ratings - Saved", "albumratings", description=f"Album rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}"
             )
 
             await msg.edit_original_response(
@@ -161,7 +161,7 @@ class AlbumRatings(commands.Cog):
             )
         except Exception as e:
             reply = EmbedReply(
-                "Album Rating - Error", "albumratings", True, description=str(e)
+                "Album Ratings - Error", "albumratings", True, description=str(e)
             )
 
             await reply.send(ctx, ephemeral=True)
@@ -230,7 +230,7 @@ class AlbumRatings(commands.Cog):
                 await albumRatingEmbed.send(ctx)
         except Exception as e:
             reply = EmbedReply(
-                "Album Rating - Error", "albumratings", True, description=str(e)
+                "Album Ratings - Error", "albumratings", True, description=str(e)
             )
 
             await reply.send(ctx, ephemeral=True)
@@ -359,7 +359,7 @@ class AlbumRatings(commands.Cog):
                 )
 
                 savedReply = EmbedReply(
-                    "Album Rating - Edited", "albumratings", description=f"Album rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}"
+                    "Album Ratings - Edited", "albumratings", description=f"Album rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}"
                 )
 
                 await msg.edit_original_response(
@@ -383,9 +383,128 @@ class AlbumRatings(commands.Cog):
                     (packedAlbumRating[3], packedAlbumRating[4], packedAlbumRating[5], packedAlbumRating[6], packedAlbumRating[8], id)
                 )
         except Exception as e:
-            raise e
             reply = EmbedReply(
-                "Album Rating - Error", "albumratings", True, description=str(e)
+                "Album Ratings - Error", "albumratings", True, description=str(e)
+            )
+
+            await reply.send(ctx, ephemeral=True)
+
+    @albumRatings.command(
+        description="Delete an album rating (by Rating ID).", guild_ids=[799341195109203998]
+    )
+    async def delete(
+        self,
+        ctx: discord.ApplicationContext,
+        id: discord.Option(
+            str,
+            description="Provide the Rating ID to view. Use the list command to find this ID.",
+            required=True,
+        ),  # type: ignore
+        delete_rating_message: discord.Option(
+            bool,
+            description="Also delete the embed sent to the rating channel.",
+            default=True,
+        ),  # type: ignore
+    ):
+        try:
+            database = LocalDatabase()
+
+            targetRating = database.get("SELECT * FROM albumRatings WHERE ratingID = ?", (id,))
+
+            if not targetRating:
+                raise Exception("There were no ratings with that ID found!\n\nTry using the list command to narrow down your search.")
+            
+            packedRating = targetRating[0]
+            oldMessageID = packedRating[7]
+            createdByID = packedRating[1]
+            invokedBy: discord.User = ctx.user
+
+            if createdByID != invokedBy.id:
+                raise Exception(f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`")
+
+            unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
+
+            albumRatingEmbed = music.AlbumRatingEmbedReply(
+                unpackedRating
+            )
+
+            formattedCreatedAt = dates.formatSimpleDate(unpackedRating.createdAt, discordDateFormat="d")
+            prettyAlbumName = text.truncateString(f"{unpackedRating.name} · {unpackedRating.getArtists(True)} · {formattedCreatedAt}", 256)[0]
+
+            confirmationReplyEmbed = EmbedReply(
+                "Album Ratings - Delete",
+                "albumratings",
+                description="Are you sure you want to delete the following rating?"
+            )
+
+            confirmationReplyEmbed.add_field(
+                name=prettyAlbumName,
+                value=f"Rating ID: {unpackedRating.ratingID}"
+            )
+
+            confirmationReplyView = music.DeleteRatingView()
+
+            confirmationReply = await ctx.respond(
+                embed = confirmationReplyEmbed,
+                view = confirmationReplyView,
+                ephemeral=True
+            )
+
+            timedOut = await confirmationReplyView.wait()
+
+            if timedOut:
+                reply = EmbedReply(
+                    "Album Ratings - Delete",
+                    "albumratings",
+                    True,
+                    description="You ran out of time to delete the rating. Please try again."
+                )
+
+                await confirmationReply.edit_original_response(
+                    embed=reply,
+                    view=None
+                )
+
+                return
+            
+            if not confirmationReplyView.confirmDelete:
+                await confirmationReply.delete_original_response()
+
+                return
+
+            if delete_rating_message:
+                channel = self.bot.get_channel(RATING_CHANNEL)
+
+                if not channel:
+                    raise Exception("The rating channel could not be found.\n\nSet delete_rating_message=False when using this command.")
+
+                try:
+                    oldMessageReference = await channel.fetch_message(oldMessageID)
+
+                    await oldMessageReference.delete()
+                except discord.errors.NotFound:
+                    pass
+
+            database.setOne("DELETE FROM albumRatings WHERE ratingID = ?", (id,))
+            
+            reply = EmbedReply(
+                "Album Ratings - View ID",
+                "albumratings",
+                description=f"Successfully deleted rating. ✅"
+            )
+
+            reply.add_field(
+                name=prettyAlbumName,
+                value=f"Rating ID: {unpackedRating.ratingID}"
+            )
+
+            await confirmationReply.edit_original_response(
+                embed=reply,
+                view=None
+            )
+        except Exception as e:
+            reply = EmbedReply(
+                "Album Ratings - Error", "albumratings", True, description=str(e)
             )
 
             await reply.send(ctx, ephemeral=True)
