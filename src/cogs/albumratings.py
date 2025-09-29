@@ -426,7 +426,10 @@ class AlbumRatings(commands.Cog):
                         await oldMessageReference.delete()
 
                     ratingMessageReference = await ratingChannel.send(
-                        embed=finishedRatingEmbed
+                        embed=finishedRatingEmbed,
+                        view=music.FinishedRatingPersistentMessageButtonsView(
+                            unpackedRating.link
+                        )
                     )
 
                 packedAlbumRating = unpackedRating.packAlbumRating(
@@ -463,7 +466,12 @@ class AlbumRatings(commands.Cog):
                     ephemeral=True
                 )
             else:
-                await originalResponse.edit(embed=finishedRatingEmbed, view=None)
+                await originalResponse.edit(
+                    embed=finishedRatingEmbed,
+                    view=music.FinishedRatingPersistentMessageButtonsView(
+                            unpackedRating.link
+                    )
+                )
 
                 packedAlbumRating = unpackedRating.packAlbumRating(originalResponse)
 
