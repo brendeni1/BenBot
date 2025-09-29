@@ -1,4 +1,6 @@
 import discord
+import requests
+import asyncio
 import sys
 from discord.ext import commands, pages
 
@@ -61,120 +63,142 @@ class AlbumRatings(commands.Cog):
             required=True,
         ),  # type: ignore
     ):
-        try:
-            albumQueryResults = music.searchForAlbumName(album_name)
+        attempt = 0
+        maxRetries = 2
+        
+        while attempt < maxRetries:
+            try:
+                albumQueryResults = music.searchForAlbumName(album_name)
 
-            if not albumQueryResults["albums"]["items"]:
-                raise Exception("No albums were found with that name!")
+                if not albumQueryResults["albums"]["items"]:
+                    raise Exception("No albums were found with that name!")
 
-            reply = EmbedReply(
-                "Album Ratings - Choose Album",
-                "albumratings",
-                description="Choose the album you wish to rate from the Spotify results below.",
-            )
-
-            reply.set_footer(
-                text="Album data provided by Spotify®.",
-                icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png",
-            )
-
-            cleanedChoices = []
-
-            for idx, album in enumerate(albumQueryResults["albums"]["items"]):
-                artists = ", ".join([artist["name"] for artist in album["artists"]])
-
-                releaseYear = (dates.simpleDateObj(album["release_date"])).year
-
-                id = album["id"]
-
-                cleanedChoices.append((idx, album["name"], artists, releaseYear, id))
-                reply.add_field(
-                    name=f"{idx + 1}. {album['name']} · {releaseYear}",
-                    value=artists,
-                    inline=False,
+                reply = EmbedReply(
+                    "Album Ratings - Choose Album",
+                    "albumratings",
+                    description="Choose the album you wish to rate from the Spotify results below.",
                 )
 
-            view = music.ChooseAlbumView(cleanedChoices)
+                reply.set_footer(
+                    text="Album data provided by Spotify®.",
+                    icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png",
+                )
 
-            msg = await ctx.respond(embed=reply, view=view, ephemeral=True)
-            view.message = await msg.original_response()
+                cleanedChoices = []
 
-            await view.wait()
+                for idx, album in enumerate(albumQueryResults["albums"]["items"]):
+                    artists = ", ".join([artist["name"] for artist in album["artists"]])
 
-            if view.choice == None:
-                return
-            
-            await msg.delete_original_response()
+                    releaseYear = (dates.simpleDateObj(album["release_date"])).year
 
-            albumDetailsFromID = music.fetchAlbumDetailsByID(view.choice)
+                    id = album["id"]
 
-            parsedAlbumDetails: music.Album = music.parseAlbumDetails(
-                albumDetailsFromID, ctx.user
-            )
+                    cleanedChoices.append((idx, album["name"], artists, releaseYear, id))
+                    reply.add_field(
+                        name=f"{idx + 1}. {album['name']} · {releaseYear}",
+                        value=artists,
+                        inline=False,
+                    )
 
-            firstTrack = parsedAlbumDetails.tracks[0]
+                view = music.ChooseAlbumView(cleanedChoices)
 
-            view = music.SongRatingView(parsedAlbumDetails)
+                msg = await ctx.respond(embed=reply, view=view, ephemeral=True)
+                view.message = await msg.original_response()
 
-            wholeAlbumEmbed = music.AlbumRatingEmbedReply(parsedAlbumDetails)
-            songRatingEmbed = music.TrackRatingEmbedReply(firstTrack)
+                await view.wait()
 
-            originalResponse: discord.Message = await ctx.channel.send(
-                embeds=[wholeAlbumEmbed, songRatingEmbed], view=view
-            )
-            view.message = originalResponse
+                if view.choice == None:
+                    return
+                
+                await msg.delete_original_response()
 
-            timedOut = await view.wait()
+                albumDetailsFromID = music.fetchAlbumDetailsByID(view.choice)
 
-            if timedOut or view.cancelled:
-                view.disable_all_items()
+                parsedAlbumDetails: music.Album = music.parseAlbumDetails(
+                    albumDetailsFromID, ctx.user
+                )
 
-                return
+                firstTrack = parsedAlbumDetails.tracks[0]
 
-            finishedRatingEmbed = music.AlbumRatingEmbedReply(parsedAlbumDetails)
+                view = music.SongRatingView(parsedAlbumDetails)
 
-            ratingChannel = self.bot.get_channel(RATING_CHANNEL)
+                wholeAlbumEmbed = music.AlbumRatingEmbedReply(parsedAlbumDetails)
+                songRatingEmbed = music.TrackRatingEmbedReply(firstTrack)
 
-            if not ratingChannel:
-                ratingChannel = ctx.channel
+                originalResponse: discord.Message = await ctx.channel.send(
+                    embeds=[wholeAlbumEmbed, songRatingEmbed], view=view
+                )
+                view.message = originalResponse
 
-            displayedAlbumReviewMessage: discord.Message = await ratingChannel.send(
-                embed=finishedRatingEmbed,
-                view=music.FinishedRatingPersistentMessageButtonsView(
-                    parsedAlbumDetails.link
-                ),
-            )
+                timedOut = await view.wait()
 
-            packedAlbumRating = parsedAlbumDetails.packAlbumRating(
-                displayedAlbumReviewMessage
-            )
+                if timedOut or view.cancelled:
+                    view.disable_all_items()
 
-            database = LocalDatabase()
+                    return
 
-            database.setOne(
-                """
-                INSERT INTO `albumRatings` 
-                (`ratingID`, `createdBy`, `createdAt`, `editedAt`, `ratingArtist`, `ratingAlbum`, `formattedRating`, `lastRelatedMessage`, `serializedRating`) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                packedAlbumRating,
-            )
+                finishedRatingEmbed = music.AlbumRatingEmbedReply(parsedAlbumDetails)
 
-            await originalResponse.delete()
+                ratingChannel = self.bot.get_channel(RATING_CHANNEL)
 
-            savedReply = EmbedReply(
-                "Album Ratings - Saved",
-                "albumratings",
-                description=f"Album rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}",
-            )
-            
-            await savedReply.send(
-                ctx,
-                ephemeral=True
-            )
-        except Exception as e:
+                if not ratingChannel:
+                    ratingChannel = ctx.channel
+
+                displayedAlbumReviewMessage: discord.Message = await ratingChannel.send(
+                    embed=finishedRatingEmbed,
+                    view=music.FinishedRatingPersistentMessageButtonsView(
+                        parsedAlbumDetails.link
+                    ),
+                )
+
+                packedAlbumRating = parsedAlbumDetails.packAlbumRating(
+                    displayedAlbumReviewMessage
+                )
+
+                database = LocalDatabase()
+
+                database.setOne(
+                    """
+                    INSERT INTO `albumRatings` 
+                    (`ratingID`, `createdBy`, `createdAt`, `editedAt`, `ratingArtist`, `ratingAlbum`, `formattedRating`, `lastRelatedMessage`, `serializedRating`) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    packedAlbumRating,
+                )
+
+                await originalResponse.delete()
+
+                savedReply = EmbedReply(
+                    "Album Ratings - Saved",
+                    "albumratings",
+                    description=f"Album rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}",
+                )
+                
+                await savedReply.send(
+                    ctx,
+                    ephemeral=True
+                )
+
+                break
+            except requests.exceptions.ConnectionError:
+                attempt += 1
+
+                await asyncio.sleep(1)
+                
+                continue
+            except Exception as e:
+                print(e)
+
+                reply = EmbedReply(
+                    "Album Ratings - Error", "albumratings", True, description=str(e)
+                )
+
+                await reply.send(ctx, ephemeral=True)
+
+                break
+        else:
             reply = EmbedReply(
-                "Album Ratings - Error", "albumratings", True, description=str(e)
+                "Album Ratings - Error", "albumratings", True, description="The Spotify API seems to be having issues right now.\n\nPlease try again later."
             )
 
             await reply.send(ctx, ephemeral=True)
@@ -258,6 +282,8 @@ class AlbumRatings(commands.Cog):
             else:
                 await albumRatingEmbed.send(ctx, ephemeral=ephemeral)
         except Exception as e:
+            print(e)
+
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
@@ -309,6 +335,8 @@ class AlbumRatings(commands.Cog):
 
             await pagignator.respond(ctx.interaction, ephemeral=True)
         except Exception as e:
+            print(e)
+
             reply = EmbedReply(
                 "Album Ratings - List By Member",
                 "albumratings",
@@ -490,6 +518,8 @@ class AlbumRatings(commands.Cog):
                     ),
                 )
         except Exception as e:
+            print(e)
+
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
@@ -641,6 +671,8 @@ class AlbumRatings(commands.Cog):
                 ephemeral=True
             )
         except Exception as e:
+            print(e)
+
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
@@ -763,6 +795,8 @@ class AlbumRatings(commands.Cog):
 
             await confirmationReply.edit_original_response(embed=reply, view=None)
         except Exception as e:
+            print(e)
+
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
