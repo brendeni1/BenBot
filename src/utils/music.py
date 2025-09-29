@@ -865,8 +865,11 @@ class ChooseAlbumView(discord.ui.View):
             description="Album rating timed out. Please retry.",
         )
 
-        if self.message:
-            await self.message.edit(embed=reply, view=self)
+        try:
+            if self.message:
+                await self.message.edit(embed=reply, view=self)
+        except discord.NotFound:
+            pass  # message already deleted/edited elsewhere
 
 def searchForAlbumName(query: str, limit=5, type="album") -> list:
     if not query:
