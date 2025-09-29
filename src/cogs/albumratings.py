@@ -8,7 +8,6 @@ from src.utils import dates
 
 RATING_CHANNEL = 946507420916678688
 
-
 def paginateRatingList(
     results: list[tuple], title: str, description: str
 ) -> list[pages.Page]:
