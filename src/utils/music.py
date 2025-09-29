@@ -828,8 +828,8 @@ class SelectAlbum(discord.ui.Select):
             placeholder="Choose an album...",
             options=[
                 discord.SelectOption(
-                    label=f"{choice[1]} · {choice[3]}",
-                    description=choice[2],
+                    label=text.truncateString(f"{choice[1]} · {choice[3]}", 100)[0],
+                    description=text.truncateString(choice[2], 100)[0],
                     emoji=text.numberToEmoji(choice[0] + 1),
                     value=choice[4],
                 )
