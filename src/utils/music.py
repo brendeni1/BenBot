@@ -633,7 +633,7 @@ class Album:
                     f"Shits broken! Rating condition unaccounted for: {track.rating} on rating {self.ratingID}."
                 )
 
-        mean = round(sum(cleanedRatingList) / len(cleanedRatingList), 1)
+        mean = text.smartRound(sum(cleanedRatingList) / len(cleanedRatingList), 1)
 
         if formatted:
             return f"{mean}/{self.ratingOutOf}"
