@@ -192,12 +192,10 @@ class SongRatingView(discord.ui.View):
                 "Album Ratings - Create Rating",
                 "albumratings",
                 True,
-                description= "You can’t edit someone else’s rating."
+                description="You can’t edit someone else’s rating.",
             )
 
-            await interaction.response.send_message(
-                embed=reply, ephemeral=True
-            )
+            await interaction.response.send_message(embed=reply, ephemeral=True)
 
             return False
         return True
@@ -293,13 +291,14 @@ class SelectSongRating(discord.ui.Select):
     def __init__(self, track: "Track", **kwargs):
         self.track = track
 
-        scale = list(
-            text.frange(
+        scale = [
+            text.smartRound(i)
+            for i in text.frange(
                 0,
                 track.album.ratingOutOf + constants.RATINGS_STEP,
                 constants.RATINGS_STEP,
             )
-        )
+        ]
 
         super().__init__(
             placeholder=f"Choose Rating ({scale[0]}-{scale[-1]})",
@@ -354,8 +353,8 @@ class Track:
     def getTrackNumber(self, relativeToDisk: bool = False) -> int:
         if relativeToDisk:
             return self.trackNumber
-        
-        trackNumber = self.album.tracks.index(self, start = 1)
+
+        trackNumber = self.album.tracks.index(self, start=1)
 
         return trackNumber
 
@@ -375,7 +374,11 @@ class Track:
 
     def parseComments(self, formatted: bool = False):
         if formatted:
-            return "*(No Comments)*" if not self.comments else text.truncateString(self.comments, 350)[0]
+            return (
+                "*(No Comments)*"
+                if not self.comments
+                else text.truncateString(self.comments, 350)[0]
+            )
         else:
             return self.comments
 
@@ -394,11 +397,11 @@ class Track:
             and (self.rating <= self.album.ratingOutOf)
         ):
             if formatted and roundedTo != None:
-                return f"{round(self.rating, abs(roundedTo))}/{self.album.ratingOutOf}"
+                return f"{text.smartRound(self.rating, abs(roundedTo))}/{self.album.ratingOutOf}"
             elif formatted and roundedTo == None:
                 return f"{self.rating}/{self.album.ratingOutOf}"
             elif not formatted and roundedTo != None:
-                return round(self.rating, abs(roundedTo))
+                return text.smartRound(self.rating, abs(roundedTo))
             else:
                 return self.rating
         elif self.rating == -1 and formatted:
@@ -491,7 +494,9 @@ class TrackRatingEmbedReply(EmbedReply):
         else:
             positionString = f"Track {track.trackNumber}/{track.album.totalTracks()}"
 
-        title = text.truncateString(f"{positionString} 👤 {formattedArtists} ⏯️ {track.name} 🔗↗️", 256)[0]
+        title = text.truncateString(
+            f"{positionString} 👤 {formattedArtists} ⏯️ {track.name} 🔗↗️", 256
+        )[0]
         super().__init__(
             title,
             "albumratings",
@@ -571,25 +576,29 @@ class Album:
 
     def getAllDiscNumbers(self) -> list[int]:
         if not self.tracks:
-            raise ValueError("There are no tracks for this album and the discs could not be processed.")
-        
+            raise ValueError(
+                "There are no tracks for this album and the discs could not be processed."
+            )
+
         discs = []
-        
+
         for track in self.tracks:
             if track.discNumber in discs:
                 continue
-            
+
             discs.append(track.discNumber)
-        
+
         discs.sort()
 
         return discs
-    
+
     def getTracksOnDisc(self, targetDisc: int) -> list[Track]:
         if targetDisc not in self.getAllDiscNumbers():
             raise ValueError("gettracksondisc: Disc index out of range!")
-        
-        filteredTracks: list[Track] = [track for track in self.tracks if track.discNumber == targetDisc]
+
+        filteredTracks: list[Track] = [
+            track for track in self.tracks if track.discNumber == targetDisc
+        ]
 
         return filteredTracks
 
@@ -682,7 +691,11 @@ class Album:
 
     def parseComments(self, formatted: bool = False):
         if formatted:
-            return "*(No Comments)*" if not self.comments else text.truncateString(self.comments, 2000)[0]
+            return (
+                "*(No Comments)*"
+                if not self.comments
+                else text.truncateString(self.comments, 2000)[0]
+            )
         else:
             return self.comments
 
@@ -720,7 +733,10 @@ class AlbumRatingEmbedReply(EmbedReply):
     def __init__(self, album: Album):
         formattedArtists: str = album.getArtists(True)
 
-        title = text.truncateString(f"👤 {formattedArtists} 💽 {album.name} 📅 {album.releaseYear(True, True)} 🔗↗️", 256)[0]
+        title = text.truncateString(
+            f"👤 {formattedArtists} 💽 {album.name} 📅 {album.releaseYear(True, True)} 🔗↗️",
+            256,
+        )[0]
         super().__init__(title, "albumratings", url=album.link, description="")
 
         self.set_thumbnail(url=album.coverImage)
@@ -846,6 +862,7 @@ class SelectAlbum(discord.ui.Select):
 
         await ctx.response.defer()
 
+
 class ChooseAlbumView(discord.ui.View):
     def __init__(self, choices: list[tuple]):
         super().__init__(timeout=TIMEOUT_TO_PICK_ALBUM, disable_on_timeout=True)
@@ -870,6 +887,7 @@ class ChooseAlbumView(discord.ui.View):
                 await self.message.edit(embed=reply, view=self)
         except discord.NotFound:
             pass  # message already deleted/edited elsewhere
+
 
 def searchForAlbumName(query: str, limit=5, type="album") -> list:
     if not query:

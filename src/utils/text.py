@@ -25,6 +25,14 @@ def numberToEmoji(number: int, emojiMap: dict[str] = constants.EMOJI_MAP) -> str
 def rgb_to_hex(rgb):
     return "#{:02x}{:02x}{:02x}".format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
 
+def smartRound(x, ndigits=1):
+    rounded = round(x, ndigits)
+    
+    if rounded.is_integer():
+        return int(rounded)
+    
+    return rounded
+
 def frange(start, stop=None, step=1.0):
     """
     A float-friendly version of range().
