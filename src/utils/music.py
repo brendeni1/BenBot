@@ -491,7 +491,7 @@ class TrackRatingEmbedReply(EmbedReply):
         else:
             positionString = f"Track {track.trackNumber}/{track.album.totalTracks()}"
 
-        title = f"{positionString} 👤 {formattedArtists} ⏯️ {track.name} 🔗↗️"
+        title = text.truncateString(f"{positionString} 👤 {formattedArtists} ⏯️ {track.name} 🔗↗️", 256)[0]
         super().__init__(
             title,
             "albumratings",
@@ -720,7 +720,7 @@ class AlbumRatingEmbedReply(EmbedReply):
     def __init__(self, album: Album):
         formattedArtists: str = album.getArtists(True)
 
-        title = f"👤 {formattedArtists} 💽 {album.name} 📅 {album.releaseYear(True, True)} 🔗↗️"
+        title = text.truncateString(f"👤 {formattedArtists} 💽 {album.name} 📅 {album.releaseYear(True, True)} 🔗↗️", 256)[0]
         super().__init__(title, "albumratings", url=album.link, description="")
 
         self.set_thumbnail(url=album.coverImage)
