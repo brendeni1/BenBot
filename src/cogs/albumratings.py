@@ -326,7 +326,7 @@ class AlbumRatings(commands.Cog):
             pageList = paginateRatingList(
                 results,
                 "Album Ratings - List By Member",
-                f"List of ratings for {member.mention}.",
+                f"List of ratings for {member.mention}. ({len(results)} Total)",
             )
 
             pagignator = pages.Paginator(

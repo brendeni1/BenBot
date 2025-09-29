@@ -267,9 +267,14 @@ class SongRatingView(discord.ui.View):
 
         self._updateItems()
 
-        await ctx.response.edit_message(
-            embeds=[wholeAlbumEmbed, songRatingEmbed], view=self
-        )
+        try:
+            await ctx.response.edit_message(
+                embeds=[wholeAlbumEmbed, songRatingEmbed], view=self
+            )
+        except discord.NotFound:
+            print("random fuckass error in SongRatingView again where the edit bugs (notfound) but nothing actually is broken?")
+            
+            pass # idek bruh
 
     async def on_timeout(self):
         reply = EmbedReply(
