@@ -1,9 +1,9 @@
 .venv/
 .env
-.cache
 .vscode/
 *__pycache__/
 
 src/data*
 src/temp*
 *session*
+.cache
