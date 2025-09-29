@@ -375,7 +375,7 @@ class Track:
 
     def parseComments(self, formatted: bool = False):
         if formatted:
-            return "*(No Comments)*" if not self.comments else self.comments
+            return "*(No Comments)*" if not self.comments else text.truncateString(self.comments, 350)[0]
         else:
             return self.comments
 
@@ -682,7 +682,7 @@ class Album:
 
     def parseComments(self, formatted: bool = False):
         if formatted:
-            return "*(No Comments)*" if not self.comments else self.comments
+            return "*(No Comments)*" if not self.comments else text.truncateString(self.comments, 2000)[0]
         else:
             return self.comments
 
