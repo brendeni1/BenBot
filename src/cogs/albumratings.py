@@ -104,6 +104,8 @@ class AlbumRatings(commands.Cog):
 
             if view.choice == None:
                 return
+            
+            await msg.delete_original_response()
 
             albumDetailsFromID = music.fetchAlbumDetailsByID(view.choice)
 
@@ -118,11 +120,10 @@ class AlbumRatings(commands.Cog):
             wholeAlbumEmbed = music.AlbumRatingEmbedReply(parsedAlbumDetails)
             songRatingEmbed = music.TrackRatingEmbedReply(firstTrack)
 
-            await msg.edit_original_response(
+            originalResponse: discord.Message = await ctx.channel.send(
                 embeds=[wholeAlbumEmbed, songRatingEmbed], view=view
             )
-
-            originalResponse = await msg.original_response()
+            view.message = originalResponse
 
             timedOut = await view.wait()
 
@@ -160,13 +161,18 @@ class AlbumRatings(commands.Cog):
                 packedAlbumRating,
             )
 
+            await originalResponse.delete()
+
             savedReply = EmbedReply(
                 "Album Ratings - Saved",
                 "albumratings",
                 description=f"Album rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}",
             )
-
-            await originalResponse.edit(embed=savedReply, view=None)
+            
+            await savedReply.send(
+                ctx,
+                ephemeral=True
+            )
         except Exception as e:
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
@@ -368,7 +374,7 @@ class AlbumRatings(commands.Cog):
                 raise Exception(
                     f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`"
                 )
-
+            
             unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
 
             firstTrack = unpackedRating.tracks[0]
@@ -378,10 +384,10 @@ class AlbumRatings(commands.Cog):
             wholeAlbumEmbed = music.AlbumRatingEmbedReply(unpackedRating)
             songRatingEmbed = music.TrackRatingEmbedReply(firstTrack)
 
-            msg = await ctx.respond(
-                embeds=[wholeAlbumEmbed, songRatingEmbed], view=view, ephemeral=True
+            originalResponse: discord.Interaction = await ctx.respond(
+                embeds=[wholeAlbumEmbed, songRatingEmbed], view=view
             )
-            msg = await msg.original_response()
+            view.message = originalResponse
 
             timedOut = await view.wait()
 
@@ -444,17 +450,22 @@ class AlbumRatings(commands.Cog):
                     ),
                 )
 
+                await originalResponse.delete_original_response()
+
                 savedReply = EmbedReply(
                     "Album Ratings - Edited",
                     "albumratings",
                     description=f"Album rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}",
                 )
 
-                await msg.edit(embed=savedReply, view=None)
+                await savedReply.send(
+                    ctx,
+                    ephemeral=True
+                )
             else:
-                await msg.edit(embed=finishedRatingEmbed, view=None)
+                await originalResponse.edit(embed=finishedRatingEmbed, view=None)
 
-                packedAlbumRating = unpackedRating.packAlbumRating(msg)
+                packedAlbumRating = unpackedRating.packAlbumRating(originalResponse)
 
                 database.setOne(
                     """

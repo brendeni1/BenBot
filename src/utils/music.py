@@ -19,7 +19,7 @@ SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 
 # Timeouts in mins.
 TIMEOUT_TO_PICK_ALBUM = 1 * (60)
-TIMEOUT_FOR_RATING_SELECT = 300 * (60)
+TIMEOUT_FOR_RATING_SELECT = 0.25 * (60)
 
 FAVOURITE_INDEX_OPTIONS = sorted(
     [
@@ -97,18 +97,12 @@ class CancelConfirmView(discord.ui.View):
         label="Cancel Rating", style=discord.ButtonStyle.danger, emoji="⛔"
     )
     async def confirm(self, button: discord.ui.Button, ctx: discord.Interaction):
-        reply = EmbedReply(
-            "Album Rating - Cancelled",
-            "albumratings",
-            True,
-            description="Album rating cancelled.",
-        )
+        response = await ctx.response.defer()
 
-        await ctx.response.edit_message(embed=reply, view=None)
+        await ctx.delete_original_response()
 
         self.ratingView.cancelled = True
 
-        self.disable_all_items()
         self.stop()
 
 
@@ -191,6 +185,23 @@ class SongRatingView(discord.ui.View):
 
         self._updateItems()
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Ensure only the rating owner can interact."""
+        if interaction.user.id != self.album.createdBy.id:
+            reply = EmbedReply(
+                "Album Ratings - Create Rating",
+                "albumratings",
+                True,
+                description= "You can’t edit someone else’s rating."
+            )
+
+            await interaction.response.send_message(
+                embed=reply, ephemeral=True
+            )
+
+            return False
+        return True
+
     def _updateItems(self):
         self.clear_items()
 
@@ -263,8 +274,6 @@ class SongRatingView(discord.ui.View):
         )
 
     async def on_timeout(self):
-        self.disable_all_items()
-
         reply = EmbedReply(
             "Album Rating - Timed Out",
             "albumratings",
@@ -272,8 +281,12 @@ class SongRatingView(discord.ui.View):
             description=f"Album rating timed out after {round((TIMEOUT_FOR_RATING_SELECT/60)/60, 2)} hrs of inactivity. Please retry the rating.",
         )
 
-        if self.message:
-            await self.message.edit(embed=reply, view=self)
+        try:
+            await self.message.edit(embed=reply, view=None)
+        except discord.NotFound:
+            pass  # message already deleted/edited elsewhere
+
+        self.stop()
 
 
 class SelectSongRating(discord.ui.Select):
@@ -833,7 +846,6 @@ class SelectAlbum(discord.ui.Select):
 
         await ctx.response.defer()
 
-
 class ChooseAlbumView(discord.ui.View):
     def __init__(self, choices: list[tuple]):
         super().__init__(timeout=TIMEOUT_TO_PICK_ALBUM, disable_on_timeout=True)
@@ -855,7 +867,6 @@ class ChooseAlbumView(discord.ui.View):
 
         if self.message:
             await self.message.edit(embed=reply, view=self)
-
 
 def searchForAlbumName(query: str, limit=5, type="album") -> list:
     if not query:
