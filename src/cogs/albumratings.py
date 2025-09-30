@@ -10,6 +10,8 @@ from src.utils import dates
 
 RATING_CHANNEL = 946507420916678688
 
+DELETE_SAVED_REPLY_AFTER = 15
+
 def paginateRatingList(
     results: list[tuple], title: str, description: str
 ) -> list[pages.Page]:
@@ -171,12 +173,12 @@ class AlbumRatings(commands.Cog):
                 savedReply = EmbedReply(
                     "Album Ratings - Saved",
                     "albumratings",
-                    description=f"Album rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}",
+                    description=f"{ctx.author.mention}\n\nAlbum rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}\n\nMessage will delete after {DELETE_SAVED_REPLY_AFTER} seconds.",
                 )
 
-                ctx.send(
+                await ctx.send(
                     embed=savedReply,
-                    ephemeral=True
+                    delete_after=DELETE_SAVED_REPLY_AFTER
                 )
 
                 break
@@ -485,12 +487,12 @@ class AlbumRatings(commands.Cog):
                 savedReply = EmbedReply(
                     "Album Ratings - Edited",
                     "albumratings",
-                    description=f"Album rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}",
+                    description=f"{ctx.author.mention}\n\nAlbum rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}\n\nMessage will delete after {DELETE_SAVED_REPLY_AFTER} seconds.",
                 )
 
-                ctx.send(
+                await ctx.send(
                     embed=savedReply,
-                    ephemeral=True
+                    delete_after=DELETE_SAVED_REPLY_AFTER
                 )
             else:
                 await originalResponse.edit(
