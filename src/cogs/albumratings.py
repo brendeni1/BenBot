@@ -173,9 +173,9 @@ class AlbumRatings(commands.Cog):
                     "albumratings",
                     description=f"Album rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}",
                 )
-                
-                await savedReply.send(
-                    ctx,
+
+                ctx.send(
+                    embed=savedReply,
                     ephemeral=True
                 )
 
@@ -488,8 +488,8 @@ class AlbumRatings(commands.Cog):
                     description=f"Album rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}",
                 )
 
-                await savedReply.send(
-                    ctx,
+                ctx.send(
+                    embed=savedReply,
                     ephemeral=True
                 )
             else:
