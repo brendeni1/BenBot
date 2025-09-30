@@ -14,8 +14,11 @@ def truncateString(string: str, maxLength: int, addElipsis: bool = True, splitOn
     
     return truncatedString
 
-def numberToEmoji(number: int, emojiMap: dict[str] = constants.EMOJI_MAP) -> str:
+def numberToEmoji(number: int, emojiMap: dict[str] = constants.EMOJI_MAP, emojiIfSingleDigitsOnly: str | None = None) -> str:
     finished = ""
+
+    if len(str(number)) > 1 and emojiIfSingleDigitsOnly:
+        return emojiIfSingleDigitsOnly
     
     for number in str(number):    
         finished += emojiMap[number]

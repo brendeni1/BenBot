@@ -252,10 +252,10 @@ class SongRatingView(discord.ui.View):
                 )
             )
 
-            self.add_item(PreviousTrackButton(row=3, disabled=not isFirstSong))
-            self.add_item(NextTrackButton(row=3, disabled=isLastSong))
+            self.add_item(PreviousTrackButton(row=4, disabled=not isFirstSong))
+            self.add_item(NextTrackButton(row=4, disabled=isLastSong))
+        self.add_item(OpenLink("Play Song On Spotify", track.link, row=3))
 
-        self.add_item(OpenLink("Play Song On Spotify", track.link, row=4))
         self.add_item(CancelButton(row=4))
         self.add_item(SaveRatingButton(row=4))
 
@@ -851,7 +851,7 @@ class SelectAlbum(discord.ui.Select):
                 discord.SelectOption(
                     label=text.truncateString(f"{choice[1]} · {choice[3]}", 100)[0],
                     description=text.truncateString(choice[2], 100)[0],
-                    emoji=text.numberToEmoji(choice[0] + 1),
+                    emoji=text.numberToEmoji(choice[0] + 1, emojiIfSingleDigitsOnly="ℹ️"),
                     value=choice[4],
                 )
                 for choice in choices
@@ -889,7 +889,7 @@ class ChooseAlbumView(discord.ui.View):
 
         try:
             if self.message:
-                await self.message.edit(embed=reply, view=self)
+                await self.message.edit(embed=reply, view=None)
         except discord.NotFound:
             pass  # message already deleted/edited elsewhere
 

@@ -12,6 +12,8 @@ RATING_CHANNEL = 946507420916678688
 
 DELETE_SAVED_REPLY_AFTER = 15
 
+ALBUM_APISEARCH_RESULTS_LIMIT = 5
+
 def paginateRatingList(
     results: list[tuple], title: str, description: str
 ) -> list[pages.Page]:
@@ -70,7 +72,7 @@ class AlbumRatings(commands.Cog):
         
         while attempt < maxRetries:
             try:
-                albumQueryResults = music.searchForAlbumName(album_name)
+                albumQueryResults = music.searchForAlbumName(album_name, limit=ALBUM_APISEARCH_RESULTS_LIMIT)
 
                 if not albumQueryResults["albums"]["items"]:
                     raise Exception("No albums were found with that name!")
@@ -173,10 +175,11 @@ class AlbumRatings(commands.Cog):
                 savedReply = EmbedReply(
                     "Album Ratings - Saved",
                     "albumratings",
-                    description=f"{ctx.author.mention}\n\nAlbum rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}\n\nMessage will delete after {DELETE_SAVED_REPLY_AFTER} seconds.",
+                    description=f"Album rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}\n\n(This message will delete after {DELETE_SAVED_REPLY_AFTER} seconds.)",
                 )
 
                 await ctx.send(
+                    content=ctx.author.mention,
                     embed=savedReply,
                     delete_after=DELETE_SAVED_REPLY_AFTER
                 )
@@ -487,10 +490,11 @@ class AlbumRatings(commands.Cog):
                 savedReply = EmbedReply(
                     "Album Ratings - Edited",
                     "albumratings",
-                    description=f"{ctx.author.mention}\n\nAlbum rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}\n\nMessage will delete after {DELETE_SAVED_REPLY_AFTER} seconds.",
+                    description=f"Album rating edited. ✅\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}\n\n(This message will delete after {DELETE_SAVED_REPLY_AFTER} seconds.)",
                 )
 
                 await ctx.send(
+                    content=ctx.author.mention,
                     embed=savedReply,
                     delete_after=DELETE_SAVED_REPLY_AFTER
                 )
