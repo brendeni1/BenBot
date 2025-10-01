@@ -225,6 +225,11 @@ class AlbumRatings(commands.Cog):
             description="Instead of replying to the command here, send the embed to the rating channel without context.",
             default=True,
         ),  # type: ignore
+        edit_original_rating_message: discord.Option(
+            bool,
+            description="Instead of re-sending the updated rating message, update the original one.",
+            default=False,
+        ),  # type: ignore
         ephemeral: discord.Option(
             bool,
             description="By default, the rating will only be viewable by you. Set to False to send as a chat reply.",
@@ -258,24 +263,39 @@ class AlbumRatings(commands.Cog):
                         "The rating channel could not be found.\n\nSet send_to_rating_channel=False when using this command."
                     )
 
+                oldMessageReference = None
+
                 try:
                     oldMessageReference = await channel.fetch_message(oldMessageID)
 
-                    await oldMessageReference.delete()
+                    if not edit_original_rating_message:
+                        await oldMessageReference.delete()
+
                 except discord.errors.NotFound:
                     pass
 
-                ratingMessageReference = await channel.send(
-                    embed=albumRatingEmbed,
-                    view=music.FinishedRatingPersistentMessageButtonsView(
-                        unpackedRating.link
-                    ),
-                )
+                if not edit_original_rating_message:
+                    ratingMessageReference = await channel.send(
+                        embed=albumRatingEmbed,
+                        view=music.FinishedRatingPersistentMessageButtonsView(
+                            unpackedRating.link
+                        ),
+                    )
+                elif oldMessageReference and edit_original_rating_message:
+                    ratingMessageReference = await oldMessageReference.edit(
+                        embed=albumRatingEmbed,
+                        view=music.FinishedRatingPersistentMessageButtonsView(
+                            unpackedRating.link
+                        ),
+                    )
+                else:
+                    raise Exception("Old message could not be found and edit_original_rating_message=True...")
 
-                database.setOne(
-                    "UPDATE albumRatings SET lastRelatedMessage = ? WHERE ratingID = ?",
-                    (ratingMessageReference.id, id),
-                )
+                if not edit_original_rating_message:
+                    database.setOne(
+                        "UPDATE albumRatings SET lastRelatedMessage = ? WHERE ratingID = ?",
+                        (ratingMessageReference.id, id),
+                    )
 
                 reply = EmbedReply(
                     "Album Ratings - View ID",
