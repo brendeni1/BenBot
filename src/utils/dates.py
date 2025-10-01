@@ -51,7 +51,7 @@ def formatSimpleDate(
     discordDateFormat: str = None
 ) -> str:
     """
-    Format a date or datetime object into a readable string or Discord's rich timestamp format.
+    Format a date or datetime object into a readable string (Jan 1 1970) or Discord's rich timestamp format.
 
     Parameters
     ----------
