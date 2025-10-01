@@ -254,7 +254,8 @@ class SongRatingView(discord.ui.View):
 
             self.add_item(PreviousTrackButton(row=4, disabled=not isFirstSong))
             self.add_item(NextTrackButton(row=4, disabled=isLastSong))
-        self.add_item(OpenLink("Play Song On Spotify", track.link, row=3))
+        
+        # self.add_item(OpenLink("Play Song On Spotify", track.link, row=3))
 
         self.add_item(CancelButton(row=4))
         self.add_item(SaveRatingButton(row=4))
@@ -354,6 +355,16 @@ class Track:
         self.favouriteIndex = favouriteIndex
         self.comments = comments
         self.album = album
+
+    def getDuration(self, formatted: bool = False) -> int | str:
+        if formatted:
+            convertedToSeconds = round(self.durationMS / 1000)
+
+            formattedToHuman = dates.formatSeconds(convertedToSeconds)
+
+            return formattedToHuman
+        else:
+            return self.durationMS
 
     def getTrackNumber(self, relativeToDisk: bool = False) -> int:
         if relativeToDisk:
@@ -500,7 +511,7 @@ class TrackRatingEmbedReply(EmbedReply):
             positionString = f"Track {track.trackNumber}/{track.album.totalTracks()}"
 
         title = text.truncateString(
-            f"{positionString} 👤 {formattedArtists} ⏯️ {track.name} 🔗↗️", 256
+            f"{positionString} 👤 {formattedArtists} ⏯️ {track.name}{' (🔞) ' if track.explicit else ' '}🔗↗️", 256
         )[0]
         super().__init__(
             title,
@@ -530,7 +541,11 @@ class TrackRatingEmbedReply(EmbedReply):
             )
 
         self.add_field(
-            name="***Song Comments***", value=track.parseComments(True), inline=True
+            name="***Song Duration***", value=track.getDuration(True), inline=True
+        )
+
+        self.add_field(
+            name="***Song Comments***", value=track.parseComments(True), inline=False
         )
 
         self.set_author(
@@ -570,6 +585,24 @@ class Album:
         self.coverImage = coverImage
         self.coverImageColour = coverImageColour
         self.comments = comments
+
+    def albumDuration(self, formatted: bool = False) -> int | str:
+        """
+        Returns the album duration in milliseconds.
+        """
+        durationCounter = 0
+
+        for track in self.tracks:
+            durationCounter += track.durationMS
+
+        if formatted:
+            convertedToSeconds = round(durationCounter / 1000)
+
+            formattedToHuman = dates.formatSeconds(convertedToSeconds)
+
+            return formattedToHuman
+        else:
+            return durationCounter
 
     def totalTracks(self, includeSkipped: bool = True) -> int:
         if not includeSkipped:
@@ -784,7 +817,17 @@ class AlbumRatingEmbedReply(EmbedReply):
         self.add_field(
             name="***Overall Album Rating***",
             value=f"`{album.meanRating(True)}`",
-            inline=False,
+            inline=True,
+        )
+
+        self.add_field(
+            name="***Album Duration***",
+            value=f"{album.albumDuration(True)}",
+            inline=True,
+        )
+
+        self.add_field(
+            name="***Album Rating By***", value=album.createdBy.mention, inline=True
         )
 
         self.add_field(
@@ -799,10 +842,6 @@ class AlbumRatingEmbedReply(EmbedReply):
                 value=f"{dates.formatSimpleDate(album.editedAt, discordDateFormat="f")}",
                 inline=True,
             )
-
-        self.add_field(
-            name="***Album Rating By***", value=album.createdBy.mention, inline=True
-        )
 
         self.add_field(
             name="***Album Comments***", value=album.parseComments(True), inline=False
