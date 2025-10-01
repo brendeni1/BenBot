@@ -211,7 +211,6 @@ class SongRatingView(discord.ui.View):
 
         self.add_item(SelectSongRating(track, row=0))
 
-
         if trackAmount > 1:
             currentFavouriteIndex = track.getFavouriteIndex()
 
@@ -253,13 +252,13 @@ class SongRatingView(discord.ui.View):
 
         self.add_item(EditCommentsButton("Edit Album Comments", self.album, row=2))
 
-            self.add_item(PreviousTrackButton(row=4, disabled=not isFirstSong))
-            self.add_item(NextTrackButton(row=4, disabled=isLastSong))
+        self.add_item(PreviousTrackButton(row=3, disabled=not isFirstSong))
+        self.add_item(NextTrackButton(row=3, disabled=isLastSong))
         
         # self.add_item(OpenLink("Play Song On Spotify", track.link, row=3))
 
-        self.add_item(CancelButton(row=4))
-        self.add_item(SaveRatingButton(row=4))
+        self.add_item(CancelButton(row=3))
+        self.add_item(SaveRatingButton(row=3))
 
     async def showTrackAndRating(self, ctx: discord.Interaction):
         track = self.album.tracks[self.index]
