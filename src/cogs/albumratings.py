@@ -39,7 +39,6 @@ def paginateRatingList(
 
     return pageList
 
-
 class AlbumRatings(commands.Cog):
     ISCOG = True
 

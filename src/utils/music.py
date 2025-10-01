@@ -32,6 +32,8 @@ FAVOURITE_INDEX_OPTIONS = sorted(
 COMMENT_LENGTH_CHARACTER_LIMIT = 1000
 COMMENT_LENGTH_CHARACTER_LIMIT_IN_EMBED = 200
 
+FAST_NAV_SKIP_AMOUNT = 3
+
 spotifyClient = spotipy.Spotify(
     auth_manager=SpotifyClientCredentials(
         client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET
@@ -158,20 +160,30 @@ class NextTrackButton(discord.ui.Button):
             await view.showTrackAndRating(ctx)
 
 
-class PreviousTrackButton(discord.ui.Button):
-    def __init__(self, **kwargs):
+class AlbumNavigationButton(discord.ui.Button):
+    def __init__(self, label: str | None, emoji: str | None, skipAmount: int, **kwargs):
         super().__init__(
-            label="Previous Track",
+            label=label,
             style=discord.ButtonStyle.primary,
-            emoji="⬅️",
+            emoji=emoji,
             **kwargs,
         )
 
+        self.skipAmount = skipAmount
+
     async def callback(self, ctx: discord.Interaction):
-        view: SongRatingView = self.view
-        if view.index > 0:
-            view.index -= 1
-            await view.showTrackAndRating(ctx)
+        view: SongRatingView= self.view
+        
+        if not self.skipAmount:
+            raise ValueError("Skip amount not positive or negative.")
+        elif self.skipAmount > 0:
+            newIndex = min(view.album.totalTracks() - 1, view.index + self.skipAmount)
+        else:
+            newIndex = max(0, view.index + self.skipAmount)
+            
+        view.index = newIndex
+        
+        await self.view.showTrackAndRating(ctx)
 
 
 class SongRatingView(discord.ui.View):
@@ -206,7 +218,7 @@ class SongRatingView(discord.ui.View):
         track: Track = self.album.tracks[self.index]
         trackAmount = self.album.totalTracks()
 
-        isFirstSong: bool = self.index > 0
+        isFirstSong: bool = self.index == 0
         isLastSong: bool = self.index == trackAmount - 1
 
         self.add_item(SelectSongRating(track, row=0))
@@ -252,13 +264,14 @@ class SongRatingView(discord.ui.View):
 
         self.add_item(EditCommentsButton("Edit Album Comments", self.album, row=2))
 
-        self.add_item(PreviousTrackButton(row=3, disabled=not isFirstSong))
-        self.add_item(NextTrackButton(row=3, disabled=isLastSong))
-        
+        self.add_item(AlbumNavigationButton(f"Back {FAST_NAV_SKIP_AMOUNT}", "⏪", -FAST_NAV_SKIP_AMOUNT, row=3, disabled=isFirstSong))
+        self.add_item(AlbumNavigationButton("Back", "⬅️", -1, row=3, disabled=isFirstSong))
+        self.add_item(AlbumNavigationButton("Forward", "➡️", 1, row=3, disabled=isLastSong))
+        self.add_item(AlbumNavigationButton(f"Forward {FAST_NAV_SKIP_AMOUNT}", "⏩", FAST_NAV_SKIP_AMOUNT, row=3, disabled=isLastSong))
         # self.add_item(OpenLink("Play Song On Spotify", track.link, row=3))
 
-        self.add_item(CancelButton(row=3))
-        self.add_item(SaveRatingButton(row=3))
+        self.add_item(CancelButton(row=4))
+        self.add_item(SaveRatingButton(row=4))
 
     async def showTrackAndRating(self, ctx: discord.Interaction):
         track = self.album.tracks[self.index]
