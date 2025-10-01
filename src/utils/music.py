@@ -737,7 +737,7 @@ class Album:
         else:
             return self.comments
 
-    def releaseDate(
+    def formatReleaseDate(
         self, formatted: bool = False, verbose: bool = False
     ) -> int | str | None:
         """
@@ -754,7 +754,7 @@ class Album:
                 return self.releaseDate.year
         else:
             raise Exception(
-                f"releaseDate: Invalid release date! Rating ID: {self.ratingID}"
+                f"formatReleaseDate: Invalid release date! Rating ID: {self.ratingID}"
             )
 
 
@@ -775,7 +775,7 @@ class AlbumRatingEmbedReply(EmbedReply):
         formattedArtists: str = album.getArtists(True)
 
         title = text.truncateString(
-            f"👤 {formattedArtists} 💽 {album.name} 📅 {album.releaseDate(True, True)} 🔗↗️",
+            f"👤 {formattedArtists} 💽 {album.name} 📅 {album.formatReleaseDate(True, True)} 🔗↗️",
             256,
         )[0]
         super().__init__(title, "albumratings", url=album.link, description="")
