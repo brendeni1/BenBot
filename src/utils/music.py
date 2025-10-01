@@ -211,9 +211,6 @@ class SongRatingView(discord.ui.View):
 
         self.add_item(SelectSongRating(track, row=0))
 
-        self.add_item(EditCommentsButton("Edit Song Comments", track, row=2))
-
-        self.add_item(EditCommentsButton("Edit Album Comments", self.album, row=2))
 
         if trackAmount > 1:
             currentFavouriteIndex = track.getFavouriteIndex()
@@ -236,7 +233,7 @@ class SongRatingView(discord.ui.View):
             self.add_item(
                 ExcludeFromRatingButton(
                     track,
-                    row=3,
+                    row=2,
                     disabled=any(
                         [
                             track.getRating() == -1,
@@ -251,6 +248,10 @@ class SongRatingView(discord.ui.View):
                     ),
                 )
             )
+            
+        self.add_item(EditCommentsButton("Edit Song Comments", track, row=2))
+
+        self.add_item(EditCommentsButton("Edit Album Comments", self.album, row=2))
 
             self.add_item(PreviousTrackButton(row=4, disabled=not isFirstSong))
             self.add_item(NextTrackButton(row=4, disabled=isLastSong))
