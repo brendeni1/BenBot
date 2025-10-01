@@ -115,7 +115,7 @@ def formatSimpleDate(
     if includeTime:
         formattedDate = timestamp.strftime("%b %#d %Y %#I:%M %p")
     else:
-        formattedDate = timestamp.strftime("%b %-d %Y")
+        formattedDate = timestamp.strftime("%b %#d %Y")
 
     return formattedDate
 
