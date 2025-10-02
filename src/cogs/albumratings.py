@@ -519,14 +519,14 @@ class AlbumRatings(commands.Cog):
                     delete_after=DELETE_SAVED_REPLY_AFTER
                 )
             else:
-                await originalResponse.edit(
+                await originalMessage.edit(
                     embed=finishedRatingEmbed,
                     view=music.FinishedRatingPersistentMessageButtonsView(
                             unpackedRating.link
                     )
                 )
 
-                packedAlbumRating = unpackedRating.packAlbumRating(originalResponse)
+                packedAlbumRating = unpackedRating.packAlbumRating(originalMessage)
 
                 database.setOne(
                     """
