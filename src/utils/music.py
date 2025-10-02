@@ -161,11 +161,8 @@ class NextTrackButton(discord.ui.Button):
 
 
 class AlbumNavigationButton(discord.ui.Button):
-    def __init__(self, label: str | None, emoji: str | None, skipAmount: int, **kwargs):
+    def __init__(self, skipAmount: int, **kwargs):
         super().__init__(
-            label=label,
-            style=discord.ButtonStyle.primary,
-            emoji=emoji,
             **kwargs,
         )
 
@@ -264,10 +261,10 @@ class SongRatingView(discord.ui.View):
 
         self.add_item(EditCommentsButton("Edit Album Comments", self.album, row=2))
 
-        self.add_item(AlbumNavigationButton(f"Back {FAST_NAV_SKIP_AMOUNT}", "⏪", -FAST_NAV_SKIP_AMOUNT, row=3, disabled=isFirstSong))
-        self.add_item(AlbumNavigationButton("Back", "⬅️", -1, row=3, disabled=isFirstSong))
-        self.add_item(AlbumNavigationButton("Forward", "➡️", 1, row=3, disabled=isLastSong))
-        self.add_item(AlbumNavigationButton(f"Forward {FAST_NAV_SKIP_AMOUNT}", "⏩", FAST_NAV_SKIP_AMOUNT, row=3, disabled=isLastSong))
+        self.add_item(AlbumNavigationButton(-FAST_NAV_SKIP_AMOUNT, label=f"Back {FAST_NAV_SKIP_AMOUNT}", emoji="⏪", style=discord.ButtonStyle.primary, row=3, disabled=isFirstSong))
+        self.add_item(AlbumNavigationButton(-1, label="Back", emoji="⬅️", style=discord.ButtonStyle.primary, row=3, disabled=isFirstSong))
+        self.add_item(AlbumNavigationButton(1, label="Forward", emoji="➡️", style=discord.ButtonStyle.primary, row=3, disabled=isLastSong))
+        self.add_item(AlbumNavigationButton(FAST_NAV_SKIP_AMOUNT, label=f"Forward {FAST_NAV_SKIP_AMOUNT}", emoji="⏩", style=discord.ButtonStyle.primary, row=3, disabled=isLastSong))
         # self.add_item(OpenLink("Play Song On Spotify", track.link, row=3))
 
         self.add_item(CancelButton(row=4))
