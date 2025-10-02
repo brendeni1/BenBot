@@ -435,10 +435,19 @@ class AlbumRatings(commands.Cog):
             wholeAlbumEmbed = music.AlbumRatingEmbedReply(unpackedRating)
             songRatingEmbed = music.TrackRatingEmbedReply(firstTrack)
 
-            originalResponse: discord.Interaction = await ctx.respond(
+            responseReply = EmbedReply(
+                "Album Ratings - Edit",
+                "albumratings",
+                description=f"The rating editor has been opened for rating {id}."
+            )
+
+            responseMessage: discord.Interaction = await responseReply.send(ctx, ephemeral=True)
+            
+            await responseMessage.delete_original_response()
+
+            originalMessage: discord.Message = await ctx.send(
                 embeds=[wholeAlbumEmbed, songRatingEmbed], view=view
             )
-            originalMessage = await originalResponse.original_response()
             view.message = originalMessage
 
             timedOut = await view.wait()
