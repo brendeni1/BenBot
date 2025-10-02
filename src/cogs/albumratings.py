@@ -438,7 +438,8 @@ class AlbumRatings(commands.Cog):
             originalResponse: discord.Interaction = await ctx.respond(
                 embeds=[wholeAlbumEmbed, songRatingEmbed], view=view
             )
-            view.message = originalResponse
+            originalMessage = await originalResponse.original_response()
+            view.message = originalMessage
 
             timedOut = await view.wait()
 
@@ -504,7 +505,7 @@ class AlbumRatings(commands.Cog):
                     ),
                 )
 
-                await originalResponse.delete_original_response()
+                await originalMessage.delete()
 
                 savedReply = EmbedReply(
                     "Album Ratings - Edited",
