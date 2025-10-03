@@ -191,8 +191,6 @@ class AlbumRatings(commands.Cog):
                 
                 continue
             except Exception as e:
-                print(e)
-
                 reply = EmbedReply(
                     "Album Ratings - Error", "albumratings", True, description=str(e)
                 )
@@ -306,8 +304,6 @@ class AlbumRatings(commands.Cog):
             else:
                 await albumRatingEmbed.send(ctx, ephemeral=ephemeral)
         except Exception as e:
-            print(e)
-
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
@@ -319,6 +315,48 @@ class AlbumRatings(commands.Cog):
         "Use these commands to list ratings based on metrics.",
         guild_ids=[799341195109203998],
     )
+
+    @list_ratings.command(
+        description="List album ratings (by Search Term [artist or album_name]).", guild_ids=[799341195109203998]
+    )
+    async def search(
+        self,
+        ctx: discord.ApplicationContext,
+        query: str
+    ):
+        try:
+            database = LocalDatabase()
+
+            results = database.get(
+                "SELECT * FROM albumRatings WHERE ratingAlbum LIKE ? OR ratingArtist LIKE ? ORDER BY createdAt DESC",
+                ("%" + query + "%", "%" + query + "%"),
+            )
+
+            if not results:
+                raise Exception(
+                    f"No ratings found for query '{query}'.\n\nTry again with less keywords for a broader search."
+                )
+
+            pageList = paginateRatingList(
+                results,
+                "Album Ratings - List By Search",
+                f"List of ratings for query '{query}'. ({len(results)} Total)",
+            )
+
+            pagignator = pages.Paginator(
+                pages=pageList,
+            )
+
+            await pagignator.respond(ctx.interaction)
+        except Exception as e:
+            reply = EmbedReply(
+                "Album Ratings - List By Search",
+                "albumratings",
+                True,
+                description=str(e),
+            )
+
+            await reply.send(ctx, ephemeral=True)
 
     @list_ratings.command(
         description="List album ratings (by Member).", guild_ids=[799341195109203998]
@@ -357,10 +395,8 @@ class AlbumRatings(commands.Cog):
                 pages=pageList,
             )
 
-            await pagignator.respond(ctx.interaction, ephemeral=True)
+            await pagignator.respond(ctx.interaction)
         except Exception as e:
-            print(e)
-
             reply = EmbedReply(
                 "Album Ratings - List By Member",
                 "albumratings",
@@ -553,8 +589,6 @@ class AlbumRatings(commands.Cog):
                     ),
                 )
         except Exception as e:
-            print(e)
-
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
@@ -706,8 +740,6 @@ class AlbumRatings(commands.Cog):
                 ephemeral=True
             )
         except Exception as e:
-            print(e)
-
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
@@ -830,8 +862,6 @@ class AlbumRatings(commands.Cog):
 
             await confirmationReply.edit_original_response(embed=reply, view=None)
         except Exception as e:
-            print(e)
-
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
