@@ -10,6 +10,8 @@ from src.utils import dates
 
 RATING_CHANNEL = 946507420916678688
 
+LIST_RATINGS_PER_PAGE = 10
+
 DELETE_SAVED_REPLY_AFTER = 15
 
 ALBUM_APISEARCH_RESULTS_LIMIT = 5
@@ -19,10 +21,10 @@ def paginateRatingList(
 ) -> list[pages.Page]:
     pageList = []
 
-    for chunk in range(0, len(results), 25):
+    for chunk in range(0, len(results), LIST_RATINGS_PER_PAGE):
         page = EmbedReply(title, "albumratings", description=description)
 
-        for result in results[chunk : chunk + 25]:
+        for result in results[chunk : chunk + LIST_RATINGS_PER_PAGE]:
             formattedCreatedAt = dates.formatSimpleDate(
                 result[2], discordDateFormat="d"
             )
