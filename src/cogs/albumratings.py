@@ -17,7 +17,7 @@ DELETE_SAVED_REPLY_AFTER = 15
 ALBUM_APISEARCH_RESULTS_LIMIT = 5
 
 def paginateRatingList(
-    results: list[tuple], title: str, description: str
+    results: list[tuple], title: str, description: str, *, showUserInResults: bool = False
 ) -> list[pages.Page]:
     pageList = []
 
@@ -33,8 +33,13 @@ def paginateRatingList(
                 f"{result[5]} · {result[4]} · {formattedCreatedAt}", 256
             )[0]
 
+            descriptor = f"Rating ID: {result[0]}"
+
+            if showUserInResults:
+                descriptor += f"\nRating By: <@{result[1]}>"
+
             page.add_field(
-                name=formattedRatingName, value=f"Rating ID: {result[0]}", inline=False
+                name=formattedRatingName, value=descriptor, inline=False
             )
 
         pageList.append(page)
@@ -348,6 +353,7 @@ class AlbumRatings(commands.Cog):
                 results,
                 "Album Ratings - List By Search",
                 f"List of ratings for query '{query}'. ({len(results)} Total)",
+                showUserInResults=True
             )
 
             pagignator = pages.Paginator(
