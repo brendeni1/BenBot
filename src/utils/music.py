@@ -896,15 +896,15 @@ class EditCommentsModal(discord.ui.Modal):
 
 
 class SelectAlbum(discord.ui.Select):
-    def __init__(self, choices: list[tuple]):
+    def __init__(self, choices: dict):
         super().__init__(
             placeholder="Choose an album...",
             options=[
                 discord.SelectOption(
-                    label=text.truncateString(f"{choice[1]} · {choice[3]}", 100)[0],
-                    description=text.truncateString(choice[2], 100)[0],
-                    emoji=text.numberToEmoji(choice[0] + 1, emojiIfSingleDigitsOnly="ℹ️"),
-                    value=choice[4],
+                    label=text.truncateString(f"{choice['name']} · {choice['releaseDate']} ({choice['trackAmount']} Track{'s' if choice['trackAmount'] > 1 else ''})", 100)[0],
+                    description=text.truncateString(choice['artists'], 100)[0],
+                    emoji=text.numberToEmoji(choice['index'] + 1, emojiIfSingleDigitsOnly="ℹ️"),
+                    value=choice['spotifyID'],
                 )
                 for choice in choices
             ],

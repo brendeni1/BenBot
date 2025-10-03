@@ -89,23 +89,28 @@ class AlbumRatings(commands.Cog):
                     icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png",
                 )
 
-                cleanedChoices = []
+                choiceObjects = []
 
                 for idx, album in enumerate(albumQueryResults["albums"]["items"]):
-                    artists = ", ".join([artist["name"] for artist in album["artists"]])
+                    choiceObject = {
+                        "index": idx,
+                        "name": album["name"],
+                        "artists": ", ".join([artist["name"] for artist in album["artists"]]),
+                        "releaseDate": dates.formatSimpleDate(album["release_date"], includeTime=False),
+                        "trackAmount": album["total_tracks"],
+                        "spotifyID": album["id"]
 
-                    releaseYear = (dates.simpleDateObj(album["release_date"])).year
+                    }
 
-                    id = album["id"]
-
-                    cleanedChoices.append((idx, album["name"], artists, releaseYear, id))
+                    choiceObjects.append(choiceObject)
+                    
                     reply.add_field(
-                        name=f"{idx + 1}. {album['name']} · {releaseYear}",
-                        value=artists,
+                        name=f"{choiceObject['index'] + 1}. {choiceObject['name']} · {choiceObject['releaseDate']} ({choiceObject['trackAmount']} Track{'s' if choiceObject['trackAmount'] > 1 else ''})",
+                        value=choiceObject["artists"],
                         inline=False,
                     )
 
-                view = music.ChooseAlbumView(cleanedChoices)
+                view = music.ChooseAlbumView(choiceObjects)
 
                 msg = await ctx.respond(embed=reply, view=view, ephemeral=True)
                 view.message = await msg.original_response()
