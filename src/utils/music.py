@@ -196,7 +196,7 @@ class SongRatingView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Ensure only the rating owner can interact."""
-        if interaction.user.id != self.album.createdBy.id:
+        if (interaction.user.id != self.album.createdBy.id) and (interaction.user.id != int(os.environ.get("OWNER"))):
             reply = EmbedReply(
                 "Album Ratings - Create Rating",
                 "albumratings",
@@ -398,12 +398,12 @@ class Track:
     def setComments(self, comments: str | None):
         self.comments = comments
 
-    def parseComments(self, formatted: bool = False):
+    def parseComments(self, formatted: bool = False, overrideCommentTruncate: int = 350):
         if formatted:
             return (
                 "*(No Comments)*"
                 if not self.comments
-                else text.truncateString(self.comments, 350)[0]
+                else text.truncateString(self.comments, overrideCommentTruncate)[0]
             )
         else:
             return self.comments
@@ -704,6 +704,7 @@ class Album:
 
         ratingArtist: str = self.getArtists(True)
         ratingAlbum: str = self.name
+        ratingAlbumSpotifyID: str = self.spotifyID
         formattedRating: str = self.meanRating(True)
 
         lastRelatedMessage = lastRelatedMessage.id
@@ -718,6 +719,7 @@ class Album:
             editedAt,
             ratingArtist,
             ratingAlbum,
+            ratingAlbumSpotifyID,
             formattedRating,
             lastRelatedMessage,
             serializedRating,
@@ -737,12 +739,12 @@ class Album:
     def setComments(self, comments: str | None):
         self.comments = comments
 
-    def parseComments(self, formatted: bool = False):
+    def parseComments(self, formatted: bool = False, overrideCommentTruncate: int = 2000):
         if formatted:
             return (
                 "*(No Comments)*"
                 if not self.comments
-                else text.truncateString(self.comments, 2000)[0]
+                else text.truncateString(self.comments, overrideCommentTruncate)[0]
             )
         else:
             return self.comments
@@ -779,90 +781,187 @@ class EditCommentsButton(discord.ui.Button):
     async def callback(self, ctx: discord.ApplicationContext):
         await ctx.response.send_modal(EditCommentsModal(self.obj, self.view))
 
-
 class AlbumRatingEmbedReply(EmbedReply):
-    def __init__(self, album: Album):
-        formattedArtists: str = album.getArtists(True)
+    def __init__(self, album: Album | list[Album]):
+        isAveraged = isinstance(album, list)
+
+        targetAlbumDetails: Album = album[0] if isAveraged else album
+        
+        formattedArtists: str = targetAlbumDetails.getArtists(True)
 
         title = text.truncateString(
-            f"👤 {formattedArtists} 💽 {album.name} 📅 {album.formatReleaseDate(True, True)} 🔗↗️",
+            f"👤 {formattedArtists} 💽 {targetAlbumDetails.name} 📅 {targetAlbumDetails.formatReleaseDate(True, True)} 🔗↗️",
             256,
         )[0]
-        super().__init__(title, "albumratings", url=album.link, description="")
+        super().__init__(title, "albumratings", url=targetAlbumDetails.link, description="")
 
-        self.set_thumbnail(url=album.coverImage)
-        self.colour = album.coverImageColour
+        self.set_thumbnail(url=targetAlbumDetails.coverImage)
+        self.colour = targetAlbumDetails.coverImageColour
         self.set_footer(
-            text=f"Album data provided by Spotify®. Rating ID: {album.ratingID}",
+            text=f"Album data provided by Spotify®." + ("" if isAveraged else f" Rating ID: {targetAlbumDetails.ratingID}"),
             icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png",
         )
 
         seenDiscs = set()
 
-        allDiscs: list[int] = album.getAllDiscNumbers()
+        allDiscs: list[int] = targetAlbumDetails.getAllDiscNumbers()
 
-        for track in album.tracks:
-            favouriteIndex = track.getFavouriteIndex()
+        for track in targetAlbumDetails.tracks:
+            if isAveraged:
+                formattedDetailsBelowTrack = ""
+                ratings = []
+                
+                for rating in album:
+                    currentSelectedTrackObject = list(filter(lambda i: i.spotifyID == track.spotifyID, rating.tracks))
 
-            medal = (
-                f" {constants.RANKING_MEDALS[str(favouriteIndex)] if str(favouriteIndex) in constants.RANKING_MEDALS else f'({text.ordinal(favouriteIndex)} Place)'} "
-                if favouriteIndex
-                else " "
-            )
+                    if not currentSelectedTrackObject:
+                        continue
 
-            comments = track.parseComments()
+                    currentSelectedTrackObject = currentSelectedTrackObject[0]
 
-            formattedComments = (
-                f"\n\u00a0\u00a0\u00a0\u00a0⤷ 💬 {text.truncateString(comments, COMMENT_LENGTH_CHARACTER_LIMIT_IN_EMBED)[0]}"
-                if comments
-                else ""
-            )
+                    songRating = currentSelectedTrackObject.getRating()
+                    
+                    if songRating != None and (songRating != -1):
+                        ratings.append(songRating)
 
-            discString = ""
+                    ratingFormatted = currentSelectedTrackObject.getRating(True)
+                    
+                    formattedDetailsBelowTrack += f"\n\u00a0\u00a0\u00a0\u00a0⤷ {rating.createdBy.mention}'s Rating: {ratingFormatted}"
 
-            if len(allDiscs) > 1 and (track.discNumber not in seenDiscs):
-                discString = f"{'' if track.discNumber == 1 else '\u00a0'}\n***💿 Disc {track.discNumber}***\n"
+                    comments = currentSelectedTrackObject.parseComments()
 
-                seenDiscs.add(track.discNumber)
+                    formattedDetailsBelowTrack += (
+                        f"\n\u00a0\u00a0\u00a0\u00a0⤷ {rating.createdBy.mention} 💬 {text.truncateString(comments, COMMENT_LENGTH_CHARACTER_LIMIT_IN_EMBED / 2)[0]}"
+                        if comments
+                        else ""
+                    )
 
-            self.description += f"{discString}**{track.trackNumber}.**{medal}{track.name} · `{track.getRating(True)}`{formattedComments}\n"
+                discString = ""
 
-        self.add_field(
-            name="***Overall Album Rating***",
-            value=f"`{album.meanRating(True)}`",
-            inline=True,
-        )
+                if len(allDiscs) > 1 and (track.discNumber not in seenDiscs):
+                    discString = f"{'' if track.discNumber == 1 else '\u00a0'}\n***💿 Disc {track.discNumber}***\n"
 
-        self.add_field(
-            name="***Album Duration***",
-            value=f"{album.albumDuration(True)}",
-            inline=True,
-        )
+                    seenDiscs.add(track.discNumber)
+                
+                if not ratings:
+                    averageSongRatingAcrossAll = "All Ratings Excluded/Unfinished"
+                else:
+                    averageSongRatingAcrossAll = f"{text.smartRound(sum(ratings) / len(ratings))}/{targetAlbumDetails.ratingOutOf}"
 
-        self.add_field(
-            name="***Album Rating By***", value=album.createdBy.mention, inline=True
-        )
+                self.description += f"{discString}**{track.trackNumber}.** {track.name} · `{averageSongRatingAcrossAll}`{formattedDetailsBelowTrack}\n"
+            else:
+                favouriteIndex = track.getFavouriteIndex()
 
-        self.add_field(
-            name="***Album Rated On***",
-            value=f"{dates.formatSimpleDate(album.createdAt, discordDateFormat="f")}",
-            inline=True,
-        )
+                medal = (
+                    f" {constants.RANKING_MEDALS[str(favouriteIndex)] if str(favouriteIndex) in constants.RANKING_MEDALS else f'({text.ordinal(favouriteIndex)} Place)'} "
+                    if favouriteIndex
+                    else " "
+                )
 
-        if album.editedAt:
+                comments = track.parseComments()
+
+                formattedComments = (
+                    f"\n\u00a0\u00a0\u00a0\u00a0⤷ 💬 {text.truncateString(comments, COMMENT_LENGTH_CHARACTER_LIMIT_IN_EMBED)[0]}"
+                    if comments
+                    else ""
+                )
+
+                discString = ""
+
+                if len(allDiscs) > 1 and (track.discNumber not in seenDiscs):
+                    discString = f"{'' if track.discNumber == 1 else '\u00a0'}\n***💿 Disc {track.discNumber}***\n"
+
+                    seenDiscs.add(track.discNumber)
+
+                self.description += f"{discString}**{track.trackNumber}.**{medal}{track.name} · `{track.getRating(True)}`{formattedComments}\n"
+
+        if isAveraged:
+            formattedRatedBy = ""
+            formattedRatedOn = ""
+            formattedComments = ""
+            individualRatingBreakdown = ""
+            ratings = []
+
+            for rating in album:
+                try:
+                    meanRating = rating.meanRating()
+                    
+                    ratings.append(meanRating)
+                except ValueError:
+                    pass
+
+                individualRatingBreakdown += f"`{rating.meanRating(True)}` ({rating.createdBy.mention})\n"
+                formattedRatedBy += f"{rating.createdBy.mention} ({rating.meanRating(True)})\n"
+                formattedRatedOn += f"{dates.formatSimpleDate(rating.createdAt, discordDateFormat="f")} ({rating.createdBy.mention})\n"
+                formattedComments += f'\n"{rating.parseComments(True, 350)}" - {rating.createdBy.mention}\n\u00a0'
+
+            if not ratings:
+                averageAlbumRatingOfAll = "All Ratings Unfinished"
+            else:
+                averageAlbumRatingOfAll = f"{text.smartRound(sum(ratings) / len(ratings))}/{targetAlbumDetails.ratingOutOf}"
+            
             self.add_field(
-                name="***Rating Edited***",
-                value=f"{dates.formatSimpleDate(album.editedAt, discordDateFormat="f")}",
+                name="***Average Album Rating of All***",
+                value=f"`{averageAlbumRatingOfAll}`\n{individualRatingBreakdown}",
+                inline=True,
+            )
+            self.add_field(
+                name="***Album Ratings By***", value=formattedRatedBy, inline=True
+            )
+            self.add_field(
+                name="***Album Ratings On***", value=formattedRatedOn, inline=True
+            )
+            self.add_field(
+                name="***Album Duration***",
+                value=f"{targetAlbumDetails.albumDuration(True)}",
+                inline=False,
+            )
+            self.add_field(
+                name="***Album Comments***", value=formattedComments, inline=False
+            )
+
+        if not isAveraged:
+            self.add_field(
+                name="***Overall Album Rating***",
+                value=f"`{targetAlbumDetails.meanRating(True)}`",
+                inline=True,
+            )
+        
+        if not isAveraged:
+            self.add_field(
+                name="***Album Duration***",
+                value=f"{targetAlbumDetails.albumDuration(True)}",
                 inline=True,
             )
 
-        self.add_field(
-            name="***Album Comments***", value=album.parseComments(True), inline=False
-        )
+        if not isAveraged:
+            self.add_field(
+                name="***Album Rating By***", value=targetAlbumDetails.createdBy.mention, inline=True
+            )
 
-        self.set_author(
-            name=album.createdBy.global_name, icon_url=album.createdBy.avatar.url
-        )
+        if not isAveraged:
+            self.add_field(
+                name="***Album Rated On***",
+                value=f"{dates.formatSimpleDate(targetAlbumDetails.createdAt, discordDateFormat="f")}",
+                inline=True,
+            )
+
+        if targetAlbumDetails.editedAt and not isAveraged:
+            self.add_field(
+                name="***Rating Edited***",
+                value=f"{dates.formatSimpleDate(targetAlbumDetails.editedAt, discordDateFormat="f")}",
+                inline=True,
+            )
+
+        if not isAveraged:
+            self.add_field(
+                name="***Album Comments***", value=targetAlbumDetails.parseComments(True), inline=False
+            )
+
+        if not isAveraged:
+            self.set_author(
+                name=targetAlbumDetails.createdBy.global_name or targetAlbumDetails.createdBy.name, icon_url=targetAlbumDetails.createdBy.avatar.url
+            )
 
 
 class EditCommentsModal(discord.ui.Modal):

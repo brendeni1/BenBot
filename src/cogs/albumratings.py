@@ -175,8 +175,8 @@ class AlbumRatings(commands.Cog):
                 database.setOne(
                     """
                     INSERT INTO `albumRatings` 
-                    (`ratingID`, `createdBy`, `createdAt`, `editedAt`, `ratingArtist`, `ratingAlbum`, `formattedRating`, `lastRelatedMessage`, `serializedRating`) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (`ratingID`, `createdBy`, `createdAt`, `editedAt`, `ratingArtist`, `ratingAlbum`, `spotifyAlbumID`, `formattedRating`, `lastRelatedMessage`, `serializedRating`) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     packedAlbumRating,
                 )
@@ -184,7 +184,7 @@ class AlbumRatings(commands.Cog):
                 await originalResponse.delete()
 
                 savedReply = EmbedReply(
-                    "Album Ratings - Saved",
+                    "Album Ratings - Create Rating",
                     "albumratings",
                     description=f"Album rating saved. ✅\n\nView rating: {displayedAlbumReviewMessage.jump_url}\n\n(This message will delete after {DELETE_SAVED_REPLY_AFTER} seconds.)",
                 )
@@ -258,7 +258,7 @@ class AlbumRatings(commands.Cog):
                 )
 
             packedRating = targetRating[0]
-            oldMessageID = packedRating[7]
+            oldMessageID = packedRating[8]
 
             unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
 
@@ -327,6 +327,110 @@ class AlbumRatings(commands.Cog):
         "Use these commands to list ratings based on metrics.",
         guild_ids=[799341195109203998],
     )
+
+    @list_ratings.command(
+        description="Average rating for all people that have rated the album (by Album Name).", guild_ids=[799341195109203998]
+    )
+    async def average(
+        self,
+        ctx: discord.ApplicationContext,
+        query: discord.Option(
+            str,
+            description="The album to search for ratings for (by Album Name)."
+        ), # type: ignore
+        ephemeral: discord.Option(
+            bool,
+            description="By default, the average rating will be public. Set to True to only be viewable by you.",
+            default=False,
+        ),  # type: ignore
+    ):
+        try:
+            await ctx.defer()
+
+            database = LocalDatabase()
+
+            initialSearch = database.get(
+                "SELECT * FROM albumRatings WHERE ratingAlbum LIKE ? ORDER BY createdAt DESC",
+                ("%" + query + "%",),
+                limit=1
+            )
+
+            if not initialSearch:
+                raise Exception(
+                    f"No ratings found for query '{query}'.\n\nTry again with less keywords for a broader search."
+                )
+
+            initialSearchResult = initialSearch[0]
+
+            allRatingsForAlbumResult = database.get(
+                "SELECT * FROM albumRatings WHERE spotifyAlbumID = ? ORDER BY createdAt DESC",
+                (initialSearchResult[6],),
+            )
+
+            unpackedRatings = [music.unpackAlbumRating(self.bot, ratingResult[-1]) for ratingResult in allRatingsForAlbumResult]
+
+            reply = music.AlbumRatingEmbedReply(unpackedRatings)
+
+            await reply.send(
+                ctx,
+                ephemeral = ephemeral,
+                view=music.FinishedRatingPersistentMessageButtonsView(
+                    unpackedRatings[0].link
+                )
+            )
+        except Exception as e:
+            reply = EmbedReply(
+                "Album Ratings - Album Rating Average",
+                "albumratings",
+                True,
+                description=str(e),
+            )
+
+            await reply.send(ctx, ephemeral=True)
+
+    @albumRatings.command(
+        description="OWNER ONLY: Reassign an album rating to a new user (by Rating ID).", guild_ids=[799341195109203998]
+    )
+    async def changerater(
+        self,
+        ctx: discord.ApplicationContext,
+        id: str,
+        new: discord.Option(
+            discord.Member
+        ) # type: ignore
+    ):
+        if not await self.bot.is_owner(ctx.user):
+            await ctx.send_response("piss off")
+
+            return
+
+        msg = await ctx.send_response("done")
+        
+        database = LocalDatabase()
+
+        initialSearch = database.get(
+            "SELECT * FROM albumRatings WHERE ratingID = ?",
+            (id,),
+        )
+
+        unpack = music.unpackAlbumRating(self.bot, initialSearch[0][-1])
+
+        unpack.createdBy = new
+
+        pack = unpack.packAlbumRating(msg)
+
+        database.setOne(
+            """
+            UPDATE `albumRatings` 
+            SET createdBy = ?, serializedRating = ?
+            WHERE ratingID = ?
+            """,
+            (
+                pack[1],
+                pack[-1],
+                id,
+            ),
+        )
 
     @list_ratings.command(
         description="List album ratings (by Search Term [artist or album_name]).", guild_ids=[799341195109203998]
@@ -464,7 +568,7 @@ class AlbumRatings(commands.Cog):
                 )
 
             packedRating = targetRating[0]
-            oldMessageID = packedRating[7]
+            oldMessageID = packedRating[8]
             createdByID = packedRating[1]
             invokedBy: discord.User = ctx.user
 
@@ -549,16 +653,14 @@ class AlbumRatings(commands.Cog):
                 database.setOne(
                     """
                     UPDATE `albumRatings` 
-                    SET editedAt = ?, ratingArtist = ?, ratingAlbum = ?, formattedRating = ?, lastRelatedMessage = ?, serializedRating = ?
+                    SET editedAt = ?, formattedRating = ?, lastRelatedMessage = ?, serializedRating = ?
                     WHERE ratingID = ?
                     """,
                     (
                         packedAlbumRating[3],
-                        packedAlbumRating[4],
-                        packedAlbumRating[5],
-                        packedAlbumRating[6],
                         packedAlbumRating[7],
                         packedAlbumRating[8],
+                        packedAlbumRating[9],
                         id,
                     ),
                 )
@@ -589,15 +691,13 @@ class AlbumRatings(commands.Cog):
                 database.setOne(
                     """
                     UPDATE `albumRatings` 
-                    SET editedAt = ?, ratingArtist = ?, ratingAlbum = ?, formattedRating = ?, serializedRating = ?
+                    SET editedAt = ?, formattedRating = ?, serializedRating = ?
                     WHERE ratingID = ?
                     """,
                     (
                         packedAlbumRating[3],
-                        packedAlbumRating[4],
-                        packedAlbumRating[5],
-                        packedAlbumRating[6],
-                        packedAlbumRating[8],
+                        packedAlbumRating[7],
+                        packedAlbumRating[9],
                         id,
                     ),
                 )
@@ -658,7 +758,7 @@ class AlbumRatings(commands.Cog):
                 )
 
             packedRating = targetRating[0]
-            oldMessageID = packedRating[7]
+            oldMessageID = packedRating[8]
             createdByID = packedRating[1]
             invokedBy: discord.User = ctx.user
 
@@ -728,16 +828,13 @@ class AlbumRatings(commands.Cog):
             database.setOne(
                 """
                 UPDATE `albumRatings` 
-                SET createdAt = ?, ratingArtist = ?, ratingAlbum = ?, formattedRating = ?, lastRelatedMessage = ?, serializedRating = ?
+                SET createdAt = ?, lastRelatedMessage = ?, serializedRating = ?
                 WHERE ratingID = ?
                 """,
                 (
                     packedAlbumRating[2],
-                    packedAlbumRating[4],
-                    packedAlbumRating[5],
-                    packedAlbumRating[6],
-                    packedAlbumRating[7],
                     packedAlbumRating[8],
+                    packedAlbumRating[9],
                     id,
                 ),
             )
@@ -790,7 +887,7 @@ class AlbumRatings(commands.Cog):
                 )
 
             packedRating = targetRating[0]
-            oldMessageID = packedRating[7]
+            oldMessageID = packedRating[8]
             createdByID = packedRating[1]
             invokedBy: discord.User = ctx.user
 
