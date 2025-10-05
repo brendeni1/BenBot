@@ -459,7 +459,14 @@ class AlbumRatings(commands.Cog):
         description="List album ratings (by Search Term [artist or album_name]).",
         guild_ids=[799341195109203998],
     )
-    async def search(self, ctx: discord.ApplicationContext, query: str):
+    async def search(
+        self,
+        ctx: discord.ApplicationContext,
+        query: discord.Option(
+            str,
+            description="The nname of the album or artist to search ratings for."
+        ), # type: ignore
+    ):
         try:
             database = LocalDatabase()
 
