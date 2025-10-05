@@ -16,8 +16,13 @@ DELETE_SAVED_REPLY_AFTER = 15
 
 ALBUM_APISEARCH_RESULTS_LIMIT = 5
 
+
 def paginateRatingList(
-    results: list[tuple], title: str, description: str, *, showUserInResults: bool = False
+    results: list[tuple],
+    title: str,
+    description: str,
+    *,
+    showUserInResults: bool = False,
 ) -> list[pages.Page]:
     pageList = []
 
@@ -38,13 +43,12 @@ def paginateRatingList(
             if showUserInResults:
                 descriptor += f"\nRating By: <@{result[1]}>"
 
-            page.add_field(
-                name=formattedRatingName, value=descriptor, inline=False
-            )
+            page.add_field(name=formattedRatingName, value=descriptor, inline=False)
 
         pageList.append(page)
 
     return pageList
+
 
 class AlbumRatings(commands.Cog):
     ISCOG = True
@@ -72,13 +76,22 @@ class AlbumRatings(commands.Cog):
             description="Provide the name of the album. The album must exist on Spotify.",
             required=True,
         ),  # type: ignore
+        song_fetch_limit: discord.Option(
+            int,
+            description="Only return N songs from the album. Useful for Super Deluxe albums with extra fluff.",
+            default=50,
+            min_value=1,
+            max_value=50,
+        ),  # type: ignore
     ):
         attempt = 0
         maxRetries = 2
-        
+
         while attempt < maxRetries:
             try:
-                albumQueryResults = music.searchForAlbumName(album_name, limit=ALBUM_APISEARCH_RESULTS_LIMIT)
+                albumQueryResults = music.searchForAlbumName(
+                    album_name, limit=ALBUM_APISEARCH_RESULTS_LIMIT
+                )
 
                 if not albumQueryResults["albums"]["items"]:
                     raise Exception("No albums were found with that name!")
@@ -100,15 +113,18 @@ class AlbumRatings(commands.Cog):
                     choiceObject = {
                         "index": idx,
                         "name": album["name"],
-                        "artists": ", ".join([artist["name"] for artist in album["artists"]]),
-                        "releaseDate": dates.formatSimpleDate(album["release_date"], includeTime=False),
+                        "artists": ", ".join(
+                            [artist["name"] for artist in album["artists"]]
+                        ),
+                        "releaseDate": dates.formatSimpleDate(
+                            album["release_date"], includeTime=False
+                        ),
                         "trackAmount": album["total_tracks"],
-                        "spotifyID": album["id"]
-
+                        "spotifyID": album["id"],
                     }
 
                     choiceObjects.append(choiceObject)
-                    
+
                     reply.add_field(
                         name=f"{choiceObject['index'] + 1}. {choiceObject['name']} · {choiceObject['releaseDate']} ({choiceObject['trackAmount']} Track{'s' if choiceObject['trackAmount'] > 1 else ''})",
                         value=choiceObject["artists"],
@@ -124,13 +140,13 @@ class AlbumRatings(commands.Cog):
 
                 if view.choice == None:
                     return
-                
+
                 await msg.delete_original_response()
 
                 albumDetailsFromID = music.fetchAlbumDetailsByID(view.choice)
 
                 parsedAlbumDetails: music.Album = music.parseAlbumDetails(
-                    albumDetailsFromID, ctx.user
+                    albumDetailsFromID, ctx.user, song_fetch_limit
                 )
 
                 firstTrack = parsedAlbumDetails.tracks[0]
@@ -192,7 +208,7 @@ class AlbumRatings(commands.Cog):
                 await ctx.send(
                     content=ctx.author.mention,
                     embed=savedReply,
-                    delete_after=DELETE_SAVED_REPLY_AFTER
+                    delete_after=DELETE_SAVED_REPLY_AFTER,
                 )
 
                 break
@@ -200,7 +216,7 @@ class AlbumRatings(commands.Cog):
                 attempt += 1
 
                 await asyncio.sleep(1)
-                
+
                 continue
             except Exception as e:
                 reply = EmbedReply(
@@ -212,7 +228,10 @@ class AlbumRatings(commands.Cog):
                 break
         else:
             reply = EmbedReply(
-                "Album Ratings - Error", "albumratings", True, description="The Spotify API seems to be having issues right now.\n\nPlease try again later."
+                "Album Ratings - Error",
+                "albumratings",
+                True,
+                description="The Spotify API seems to be having issues right now.\n\nPlease try again later.",
             )
 
             await reply.send(ctx, ephemeral=True)
@@ -298,7 +317,9 @@ class AlbumRatings(commands.Cog):
                         ),
                     )
                 else:
-                    raise Exception("Old message could not be found and edit_original_rating_message=True...")
+                    raise Exception(
+                        "Old message could not be found and edit_original_rating_message=True..."
+                    )
 
                 if not edit_original_rating_message:
                     database.setOne(
@@ -329,15 +350,15 @@ class AlbumRatings(commands.Cog):
     )
 
     @list_ratings.command(
-        description="Average rating for all people that have rated the album (by Album Name).", guild_ids=[799341195109203998]
+        description="Average rating for all people that have rated the album (by Album Name).",
+        guild_ids=[799341195109203998],
     )
     async def average(
         self,
         ctx: discord.ApplicationContext,
         query: discord.Option(
-            str,
-            description="The album to search for ratings for (by Album Name)."
-        ), # type: ignore
+            str, description="The album to search for ratings for (by Album Name)."
+        ),  # type: ignore
         ephemeral: discord.Option(
             bool,
             description="By default, the average rating will be public. Set to True to only be viewable by you.",
@@ -352,7 +373,7 @@ class AlbumRatings(commands.Cog):
             initialSearch = database.get(
                 "SELECT * FROM albumRatings WHERE ratingAlbum LIKE ? ORDER BY createdAt DESC",
                 ("%" + query + "%",),
-                limit=1
+                limit=1,
             )
 
             if not initialSearch:
@@ -367,16 +388,19 @@ class AlbumRatings(commands.Cog):
                 (initialSearchResult[6],),
             )
 
-            unpackedRatings = [music.unpackAlbumRating(self.bot, ratingResult[-1]) for ratingResult in allRatingsForAlbumResult]
+            unpackedRatings = [
+                music.unpackAlbumRating(self.bot, ratingResult[-1])
+                for ratingResult in allRatingsForAlbumResult
+            ]
 
             reply = music.AlbumRatingEmbedReply(unpackedRatings)
 
             await reply.send(
                 ctx,
-                ephemeral = ephemeral,
+                ephemeral=ephemeral,
                 view=music.FinishedRatingPersistentMessageButtonsView(
                     unpackedRatings[0].link
-                )
+                ),
             )
         except Exception as e:
             reply = EmbedReply(
@@ -389,15 +413,14 @@ class AlbumRatings(commands.Cog):
             await reply.send(ctx, ephemeral=True)
 
     @albumRatings.command(
-        description="OWNER ONLY: Reassign an album rating to a new user (by Rating ID).", guild_ids=[799341195109203998]
+        description="OWNER ONLY: Reassign an album rating to a new user (by Rating ID).",
+        guild_ids=[799341195109203998],
     )
     async def changerater(
         self,
         ctx: discord.ApplicationContext,
         id: str,
-        new: discord.Option(
-            discord.Member
-        ) # type: ignore
+        new: discord.Option(discord.Member),  # type: ignore
     ):
         if not await self.bot.is_owner(ctx.user):
             await ctx.send_response("piss off")
@@ -405,7 +428,7 @@ class AlbumRatings(commands.Cog):
             return
 
         msg = await ctx.send_response("done")
-        
+
         database = LocalDatabase()
 
         initialSearch = database.get(
@@ -433,13 +456,10 @@ class AlbumRatings(commands.Cog):
         )
 
     @list_ratings.command(
-        description="List album ratings (by Search Term [artist or album_name]).", guild_ids=[799341195109203998]
+        description="List album ratings (by Search Term [artist or album_name]).",
+        guild_ids=[799341195109203998],
     )
-    async def search(
-        self,
-        ctx: discord.ApplicationContext,
-        query: str
-    ):
+    async def search(self, ctx: discord.ApplicationContext, query: str):
         try:
             database = LocalDatabase()
 
@@ -457,7 +477,7 @@ class AlbumRatings(commands.Cog):
                 results,
                 "Album Ratings - List By Search",
                 f"List of ratings for query '{query}'. ({len(results)} Total)",
-                showUserInResults=True
+                showUserInResults=True,
             )
 
             pagignator = pages.Paginator(
@@ -578,7 +598,7 @@ class AlbumRatings(commands.Cog):
                 raise Exception(
                     f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`"
                 )
-            
+
             unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
 
             firstTrack = unpackedRating.tracks[0]
@@ -591,11 +611,13 @@ class AlbumRatings(commands.Cog):
             responseReply = EmbedReply(
                 "Album Ratings - Edit",
                 "albumratings",
-                description=f"The rating editor has been opened for rating {id}."
+                description=f"The rating editor has been opened for rating {id}.",
             )
 
-            responseMessage: discord.Interaction = await responseReply.send(ctx, ephemeral=True)
-            
+            responseMessage: discord.Interaction = await responseReply.send(
+                ctx, ephemeral=True
+            )
+
             await responseMessage.delete_original_response()
 
             originalMessage: discord.Message = await ctx.send(
@@ -643,7 +665,7 @@ class AlbumRatings(commands.Cog):
                         embed=finishedRatingEmbed,
                         view=music.FinishedRatingPersistentMessageButtonsView(
                             unpackedRating.link
-                        )
+                        ),
                     )
 
                 packedAlbumRating = unpackedRating.packAlbumRating(
@@ -676,14 +698,14 @@ class AlbumRatings(commands.Cog):
                 await ctx.send(
                     content=ctx.author.mention,
                     embed=savedReply,
-                    delete_after=DELETE_SAVED_REPLY_AFTER
+                    delete_after=DELETE_SAVED_REPLY_AFTER,
                 )
             else:
                 await originalMessage.edit(
                     embed=finishedRatingEmbed,
                     view=music.FinishedRatingPersistentMessageButtonsView(
-                            unpackedRating.link
-                    )
+                        unpackedRating.link
+                    ),
                 )
 
                 packedAlbumRating = unpackedRating.packAlbumRating(originalMessage)
@@ -741,7 +763,9 @@ class AlbumRatings(commands.Cog):
 
             ratingChannel = self.bot.get_channel(RATING_CHANNEL)
 
-            if not ratingChannel and (edit_original_rating_message or send_to_rating_channel):
+            if not ratingChannel and (
+                edit_original_rating_message or send_to_rating_channel
+            ):
                 raise Exception(
                     "The rating channel could not be found.\n\nSet send_to_rating_channel=False and edit_original_rating_message=False when using this command."
                 )
@@ -773,11 +797,11 @@ class AlbumRatings(commands.Cog):
 
             oldDate = unpackedRating.createdAt
             unpackedRating.createdAt = newDate
-            
+
             finishedRatingEmbed = music.AlbumRatingEmbedReply(unpackedRating)
 
             oldMessageNotFoundWarning: str = ""
-            
+
             if send_to_rating_channel:
                 oldMessageReference = None
 
@@ -808,22 +832,19 @@ class AlbumRatings(commands.Cog):
                         ),
                     )
             else:
-                finishedSentRating = await finishedRatingEmbed.send(
-                    ctx,
-                    ephemeral=True
-                )
+                finishedSentRating = await finishedRatingEmbed.send(ctx, ephemeral=True)
 
                 try:
                     ratingMessageReference = await ratingChannel.fetch_message(
                         oldMessageID
                     )
                 except discord.errors.NotFound:
-                    ratingMessageReference = await finishedSentRating.original_response()
+                    ratingMessageReference = (
+                        await finishedSentRating.original_response()
+                    )
                     pass
 
-            packedAlbumRating = unpackedRating.packAlbumRating(
-                ratingMessageReference
-            )
+            packedAlbumRating = unpackedRating.packAlbumRating(ratingMessageReference)
 
             database.setOne(
                 """
@@ -845,10 +866,7 @@ class AlbumRatings(commands.Cog):
                 description=f"Album rating date changed. ✅\n\nOld Date: {dates.formatSimpleDate(oldDate, discordDateFormat="f")}\nNew Date: {dates.formatSimpleDate(newDate, discordDateFormat="f")}\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}",
             )
 
-            await savedReply.send(
-                ctx,
-                ephemeral=True
-            )
+            await savedReply.send(ctx, ephemeral=True)
         except Exception as e:
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)

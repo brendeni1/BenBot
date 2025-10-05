@@ -169,17 +169,17 @@ class AlbumNavigationButton(discord.ui.Button):
         self.skipAmount = skipAmount
 
     async def callback(self, ctx: discord.Interaction):
-        view: SongRatingView= self.view
-        
+        view: SongRatingView = self.view
+
         if not self.skipAmount:
             raise ValueError("Skip amount not positive or negative.")
         elif self.skipAmount > 0:
             newIndex = min(view.album.totalTracks() - 1, view.index + self.skipAmount)
         else:
             newIndex = max(0, view.index + self.skipAmount)
-            
+
         view.index = newIndex
-        
+
         await self.view.showTrackAndRating(ctx)
 
 
@@ -196,7 +196,9 @@ class SongRatingView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Ensure only the rating owner can interact."""
-        if (interaction.user.id != self.album.createdBy.id) and (interaction.user.id != int(os.environ.get("OWNER"))):
+        if (interaction.user.id != self.album.createdBy.id) and (
+            interaction.user.id != int(os.environ.get("OWNER"))
+        ):
             reply = EmbedReply(
                 "Album Ratings - Create Rating",
                 "albumratings",
@@ -256,15 +258,51 @@ class SongRatingView(discord.ui.View):
                     ),
                 )
             )
-            
+
         self.add_item(EditCommentsButton("Edit Song Comments", track, row=2))
 
         self.add_item(EditCommentsButton("Edit Album Comments", self.album, row=2))
 
-        self.add_item(AlbumNavigationButton(-FAST_NAV_SKIP_AMOUNT, label=f"Back {FAST_NAV_SKIP_AMOUNT}", emoji="⏪", style=discord.ButtonStyle.primary, row=3, disabled=isFirstSong))
-        self.add_item(AlbumNavigationButton(-1, label="Back", emoji="⬅️", style=discord.ButtonStyle.primary, row=3, disabled=isFirstSong))
-        self.add_item(AlbumNavigationButton(1, label="Forward", emoji="➡️", style=discord.ButtonStyle.primary, row=3, disabled=isLastSong))
-        self.add_item(AlbumNavigationButton(FAST_NAV_SKIP_AMOUNT, label=f"Forward {FAST_NAV_SKIP_AMOUNT}", emoji="⏩", style=discord.ButtonStyle.primary, row=3, disabled=isLastSong))
+        self.add_item(
+            AlbumNavigationButton(
+                -FAST_NAV_SKIP_AMOUNT,
+                label=f"Back {FAST_NAV_SKIP_AMOUNT}",
+                emoji="⏪",
+                style=discord.ButtonStyle.primary,
+                row=3,
+                disabled=isFirstSong,
+            )
+        )
+        self.add_item(
+            AlbumNavigationButton(
+                -1,
+                label="Back",
+                emoji="⬅️",
+                style=discord.ButtonStyle.primary,
+                row=3,
+                disabled=isFirstSong,
+            )
+        )
+        self.add_item(
+            AlbumNavigationButton(
+                1,
+                label="Forward",
+                emoji="➡️",
+                style=discord.ButtonStyle.primary,
+                row=3,
+                disabled=isLastSong,
+            )
+        )
+        self.add_item(
+            AlbumNavigationButton(
+                FAST_NAV_SKIP_AMOUNT,
+                label=f"Forward {FAST_NAV_SKIP_AMOUNT}",
+                emoji="⏩",
+                style=discord.ButtonStyle.primary,
+                row=3,
+                disabled=isLastSong,
+            )
+        )
         # self.add_item(OpenLink("Play Song On Spotify", track.link, row=3))
 
         self.add_item(CancelButton(row=4))
@@ -283,9 +321,11 @@ class SongRatingView(discord.ui.View):
                 embeds=[wholeAlbumEmbed, songRatingEmbed], view=self
             )
         except discord.NotFound:
-            print("random fuckass error in SongRatingView again where the edit bugs (notfound) but nothing actually is broken?")
-            
-            pass # idek bruh
+            print(
+                "random fuckass error in SongRatingView again where the edit bugs (notfound) but nothing actually is broken?"
+            )
+
+            pass  # idek bruh
 
     async def on_timeout(self):
         reply = EmbedReply(
@@ -398,7 +438,9 @@ class Track:
     def setComments(self, comments: str | None):
         self.comments = comments
 
-    def parseComments(self, formatted: bool = False, overrideCommentTruncate: int = 350):
+    def parseComments(
+        self, formatted: bool = False, overrideCommentTruncate: int = 350
+    ):
         if formatted:
             return (
                 "*(No Comments)*"
@@ -521,7 +563,8 @@ class TrackRatingEmbedReply(EmbedReply):
             positionString = f"Track {track.trackNumber}/{track.album.totalTracks()}"
 
         title = text.truncateString(
-            f"{positionString} 👤 {formattedArtists} ⏯️ {track.name}{' (🔞) ' if track.explicit else ' '}🔗↗️", 256
+            f"{positionString} 👤 {formattedArtists} ⏯️ {track.name}{' (🔞) ' if track.explicit else ' '}🔗↗️",
+            256,
         )[0]
         super().__init__(
             title,
@@ -739,7 +782,9 @@ class Album:
     def setComments(self, comments: str | None):
         self.comments = comments
 
-    def parseComments(self, formatted: bool = False, overrideCommentTruncate: int = 2000):
+    def parseComments(
+        self, formatted: bool = False, overrideCommentTruncate: int = 2000
+    ):
         if formatted:
             return (
                 "*(No Comments)*"
@@ -781,24 +826,28 @@ class EditCommentsButton(discord.ui.Button):
     async def callback(self, ctx: discord.ApplicationContext):
         await ctx.response.send_modal(EditCommentsModal(self.obj, self.view))
 
+
 class AlbumRatingEmbedReply(EmbedReply):
     def __init__(self, album: Album | list[Album]):
         isAveraged = isinstance(album, list)
 
         targetAlbumDetails: Album = album[0] if isAveraged else album
-        
+
         formattedArtists: str = targetAlbumDetails.getArtists(True)
 
         title = text.truncateString(
             f"👤 {formattedArtists} 💽 {targetAlbumDetails.name} 📅 {targetAlbumDetails.formatReleaseDate(True, True)} 🔗↗️",
             256,
         )[0]
-        super().__init__(title, "albumratings", url=targetAlbumDetails.link, description="")
+        super().__init__(
+            title, "albumratings", url=targetAlbumDetails.link, description=""
+        )
 
         self.set_thumbnail(url=targetAlbumDetails.coverImage)
         self.colour = targetAlbumDetails.coverImageColour
         self.set_footer(
-            text=f"Album data provided by Spotify®." + ("" if isAveraged else f" Rating ID: {targetAlbumDetails.ratingID}"),
+            text=f"Album data provided by Spotify®."
+            + ("" if isAveraged else f" Rating ID: {targetAlbumDetails.ratingID}"),
             icon_url="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green-300x300.png",
         )
 
@@ -810,9 +859,11 @@ class AlbumRatingEmbedReply(EmbedReply):
             if isAveraged:
                 formattedDetailsBelowTrack = ""
                 ratings = []
-                
+
                 for rating in album:
-                    currentSelectedTrackObject = list(filter(lambda i: i.spotifyID == track.spotifyID, rating.tracks))
+                    currentSelectedTrackObject = list(
+                        filter(lambda i: i.spotifyID == track.spotifyID, rating.tracks)
+                    )
 
                     if not currentSelectedTrackObject:
                         continue
@@ -820,12 +871,12 @@ class AlbumRatingEmbedReply(EmbedReply):
                     currentSelectedTrackObject = currentSelectedTrackObject[0]
 
                     songRating = currentSelectedTrackObject.getRating()
-                    
+
                     if songRating != None and (songRating != -1):
                         ratings.append(songRating)
 
                     ratingFormatted = currentSelectedTrackObject.getRating(True)
-                    
+
                     formattedDetailsBelowTrack += f"\n\u00a0\u00a0\u00a0\u00a0⤷ {rating.createdBy.mention}'s Rating: {ratingFormatted}"
 
                     comments = currentSelectedTrackObject.parseComments()
@@ -842,7 +893,7 @@ class AlbumRatingEmbedReply(EmbedReply):
                     discString = f"{'' if track.discNumber == 1 else '\u00a0'}\n***💿 Disc {track.discNumber}***\n"
 
                     seenDiscs.add(track.discNumber)
-                
+
                 if not ratings:
                     averageSongRatingAcrossAll = "All Ratings Excluded/Unfinished"
                 else:
@@ -885,13 +936,17 @@ class AlbumRatingEmbedReply(EmbedReply):
             for rating in album:
                 try:
                     meanRating = rating.meanRating()
-                    
+
                     ratings.append(meanRating)
                 except ValueError:
                     pass
 
-                individualRatingBreakdown += f"`{rating.meanRating(True)}` ({rating.createdBy.mention})\n"
-                formattedRatedBy += f"{rating.createdBy.mention} ({rating.meanRating(True)})\n"
+                individualRatingBreakdown += (
+                    f"`{rating.meanRating(True)}` ({rating.createdBy.mention})\n"
+                )
+                formattedRatedBy += (
+                    f"{rating.createdBy.mention} ({rating.meanRating(True)})\n"
+                )
                 formattedRatedOn += f"{dates.formatSimpleDate(rating.createdAt, discordDateFormat="f")} ({rating.createdBy.mention})\n"
                 formattedComments += f'\n"{rating.parseComments(True, 350)}" - {rating.createdBy.mention}\n\u00a0'
 
@@ -899,7 +954,7 @@ class AlbumRatingEmbedReply(EmbedReply):
                 averageAlbumRatingOfAll = "All Ratings Unfinished"
             else:
                 averageAlbumRatingOfAll = f"{text.smartRound(sum(ratings) / len(ratings))}/{targetAlbumDetails.ratingOutOf}"
-            
+
             self.add_field(
                 name="***Average Album Rating of All***",
                 value=f"`{averageAlbumRatingOfAll}`\n{individualRatingBreakdown}",
@@ -926,7 +981,7 @@ class AlbumRatingEmbedReply(EmbedReply):
                 value=f"`{targetAlbumDetails.meanRating(True)}`",
                 inline=True,
             )
-        
+
         if not isAveraged:
             self.add_field(
                 name="***Album Duration***",
@@ -936,7 +991,9 @@ class AlbumRatingEmbedReply(EmbedReply):
 
         if not isAveraged:
             self.add_field(
-                name="***Album Rating By***", value=targetAlbumDetails.createdBy.mention, inline=True
+                name="***Album Rating By***",
+                value=targetAlbumDetails.createdBy.mention,
+                inline=True,
             )
 
         if not isAveraged:
@@ -955,12 +1012,16 @@ class AlbumRatingEmbedReply(EmbedReply):
 
         if not isAveraged:
             self.add_field(
-                name="***Album Comments***", value=targetAlbumDetails.parseComments(True), inline=False
+                name="***Album Comments***",
+                value=targetAlbumDetails.parseComments(True),
+                inline=False,
             )
 
         if not isAveraged:
             self.set_author(
-                name=targetAlbumDetails.createdBy.global_name or targetAlbumDetails.createdBy.name, icon_url=targetAlbumDetails.createdBy.avatar.url
+                name=targetAlbumDetails.createdBy.global_name
+                or targetAlbumDetails.createdBy.name,
+                icon_url=targetAlbumDetails.createdBy.avatar.url,
             )
 
 
@@ -1000,10 +1061,15 @@ class SelectAlbum(discord.ui.Select):
             placeholder="Choose an album...",
             options=[
                 discord.SelectOption(
-                    label=text.truncateString(f"{choice['name']} · {choice['releaseDate']} ({choice['trackAmount']} Track{'s' if choice['trackAmount'] > 1 else ''})", 100)[0],
-                    description=text.truncateString(choice['artists'], 100)[0],
-                    emoji=text.numberToEmoji(choice['index'] + 1, emojiIfSingleDigitsOnly="ℹ️"),
-                    value=choice['spotifyID'],
+                    label=text.truncateString(
+                        f"{choice['name']} · {choice['releaseDate']} ({choice['trackAmount']} Track{'s' if choice['trackAmount'] > 1 else ''})",
+                        100,
+                    )[0],
+                    description=text.truncateString(choice["artists"], 100)[0],
+                    emoji=text.numberToEmoji(
+                        choice["index"] + 1, emojiIfSingleDigitsOnly="ℹ️"
+                    ),
+                    value=choice["spotifyID"],
                 )
                 for choice in choices
             ],
@@ -1066,6 +1132,8 @@ def fetchAlbumDetailsByID(albumID: str) -> dict:
 def parseAlbumDetails(
     data: dict,
     createdBy: discord.Member,
+    trackLimit: int,
+    *,
     createdAt: datetime = None,
     comments: str = None,
     ratingOutOf=constants.RATINGS_OUT_OF,
@@ -1105,7 +1173,9 @@ def parseAlbumDetails(
         comments=comments,
     )
 
-    for trackData in data["tracks"]["items"]:
+    rawTracks: list[dict] = data["tracks"]["items"][:trackLimit]
+
+    for trackData in rawTracks:
         trackArtists = [
             Artist(artist["id"], artist["name"], artist["external_urls"]["spotify"])
             for artist in trackData["artists"]
