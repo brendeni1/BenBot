@@ -16,6 +16,7 @@ DELETE_SAVED_REPLY_AFTER = 15
 
 ALBUM_APISEARCH_RESULTS_LIMIT = 5
 
+SLEEP_BETWEEN_API_ATTEMPTS = 2
 
 def paginateRatingList(
     results: list[tuple],
@@ -84,6 +85,8 @@ class AlbumRatings(commands.Cog):
             max_value=50,
         ),  # type: ignore
     ):
+        await ctx.defer()
+
         attempt = 0
         maxRetries = 2
 
@@ -133,15 +136,13 @@ class AlbumRatings(commands.Cog):
 
                 view = music.ChooseAlbumView(choiceObjects)
 
-                msg = await ctx.respond(embed=reply, view=view, ephemeral=True)
-                view.message = await msg.original_response()
+                msg: discord.WebhookMessage = await ctx.respond(embed=reply, view=view, ephemeral=True)
+                view.message = msg
 
                 await view.wait()
 
                 if view.choice == None:
                     return
-
-                await msg.delete_original_response()
 
                 albumDetailsFromID = music.fetchAlbumDetailsByID(view.choice)
 
@@ -155,6 +156,8 @@ class AlbumRatings(commands.Cog):
 
                 wholeAlbumEmbed = music.AlbumRatingEmbedReply(parsedAlbumDetails)
                 songRatingEmbed = music.TrackRatingEmbedReply(firstTrack)
+
+                await msg.delete()
 
                 originalResponse: discord.Message = await ctx.channel.send(
                     embeds=[wholeAlbumEmbed, songRatingEmbed], view=view
@@ -214,8 +217,10 @@ class AlbumRatings(commands.Cog):
                 break
             except requests.exceptions.ConnectionError:
                 attempt += 1
+                
+                print(f"Spotify Connection attempt {attempt} Failed")
 
-                await asyncio.sleep(1)
+                await asyncio.sleep(SLEEP_BETWEEN_API_ATTEMPTS)
 
                 continue
             except Exception as e:
@@ -227,6 +232,8 @@ class AlbumRatings(commands.Cog):
 
                 break
         else:
+            await msg.delete()
+
             reply = EmbedReply(
                 "Album Ratings - Error",
                 "albumratings",
@@ -464,7 +471,7 @@ class AlbumRatings(commands.Cog):
         ctx: discord.ApplicationContext,
         query: discord.Option(
             str,
-            description="The nname of the album or artist to search ratings for."
+            description="The name of the album or artist to search ratings for."
         ), # type: ignore
     ):
         try:
