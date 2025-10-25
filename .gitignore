@@ -1,0 +1,10 @@
+.venv/
+.env
+.vscode/
+*__pycache__/
+
+src/data*
+src/temp*
+*session*
+.cache
+commands.md
