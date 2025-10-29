@@ -23,7 +23,7 @@ class Debug(commands.Cog):
         latency = round(self.bot.latency * 1000)
         cpuUsage = psutil.cpu_percent(interval=1)
 
-        formatted = f"<:zamn:1089027418959904809> Pong! Latency: {latency}ms. Uptime: {uptime}. CPU Usage: {cpuUsage}%.\n\nFor a list of commands and a short description, use '/commands'.\n\nSource code: https://github.com/brendeni1/BenBot"
+        formatted = f"<:sus:816524395605786624>  Pong! Latency: {latency}ms. Uptime: {uptime}. CPU Usage: {cpuUsage}%.\n\nFor a list of commands and a short description, use '/commands'.\n\nSource code: https://github.com/brendeni1/BenBot"
 
         reply = EmbedReply("Ping", "debug", description=formatted)
 
