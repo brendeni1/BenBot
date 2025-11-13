@@ -1,8 +1,9 @@
-from attr import attributes
 import discord
 import datetime
+import json
 
 from src.utils import dates
+from src import constants
 
 
 class ExperienceAttribute:
@@ -13,28 +14,26 @@ class ExperienceAttribute:
         self.precedence = precedence
 
 
-class Session:
-    def __init__(self, date: datetime.datetime, experiences: list[Experience]):  # type: ignore
-        self.date = date
-        self.experiences = experiences
-
-
 class Experience:
     def __init__(
         self,
-        session: Session,
         time: datetime.datetime,
         soldOut: bool,
         expired: bool,
         screen: str,
         attributes: list[ExperienceAttribute],
     ):
-        self.session = session
         self.time = time
         self.soldOut = soldOut
         self.expired = expired
         self.screen = screen
         self.attributes = attributes
+
+
+class Session:
+    def __init__(self, date: datetime.datetime, experiences: list[Experience]):
+        self.date = date
+        self.experiences = experiences
 
 
 class Film:
@@ -64,7 +63,3 @@ class Film:
         self.sessions = sessions
         self.isComingSoon = isComingSoon
         self.isNowShowing = isNowShowing
-
-
-def test() -> list[discord.Member]:
-    return "hello world"
