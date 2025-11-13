@@ -25,7 +25,7 @@ class Movies(commands.Cog):
         description="Look up showtimes for movies.", guild_ids=[799341195109203998]
     )
     async def showtimes(self, ctx: discord.ApplicationContext):
-        await ctx.respond(movies.test())
+        # await ctx.respond()
 
 
 def setup(bot):
