@@ -181,10 +181,10 @@ class Movies(commands.Cog):
 
                 thumbnail = await images.fetchToFile(
                     "https://www.landmarkcinemas.com/media/380058/landmark-cinemas.jpg",
-                    "landmark-logo.jpg",
+                    "cinema-logo.jpg",
                 )
 
-                reply.set_thumbnail(url="attachment://landmark-logo.jpg")
+                reply.set_thumbnail(url="attachment://cinema-logo.jpg")
 
             else:
                 raise Exception("Invalid chain passed to showtimes.")
@@ -197,7 +197,11 @@ class Movies(commands.Cog):
 
             movieSelectView = movies.MovieSelectionView(films=parsedShowtimeData)
 
-            await ctx.respond(embed=reply, view=movieSelectView, file=thumbnail)
+            selectionResponse = await ctx.respond(
+                embed=reply, view=movieSelectView, file=thumbnail
+            )
+
+            movieSelectView.message = await selectionResponse.original_response()
         except Exception as e:
             raise e
             reply = EmbedReply(

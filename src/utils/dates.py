@@ -74,7 +74,15 @@ def formatSimpleDate(
 
     discordDateFormat : str, optional
         A Discord timestamp style code (e.g., "F", "R"). Takes precedence.
-        (See original docstring for full list)
+
+        Supported codes:
+        - "t" → short time (e.g. 9:41 PM)
+        - "T" → long time with seconds (e.g. 9:41:30 PM)
+        - "d" → short date (e.g. 09/27/2025)
+        - "D" → long date (e.g. September 27, 2025)
+        - "f" → short date/time (e.g. September 27, 2025 9:41 PM)
+        - "F" → long date/time (e.g. Saturday, September 27, 2025 9:41 PM)
+        - "R" → relative time (e.g. "in 2 years", "3 days ago")
 
     Returns
     -------

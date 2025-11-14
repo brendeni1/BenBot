@@ -9,6 +9,8 @@ from src import constants
 
 from src.classes import *
 
+SELECTION_TIMEOUT = 5
+
 
 class ExperienceAttribute:
     def __init__(self, id: int, name: str, description: str, precedence: int):
@@ -256,7 +258,9 @@ async def parseShowtimes(rawData: dict, chain, province, location) -> list[Film]
 
 class MovieSelectionView(discord.ui.View):
     def __init__(self, films: list[Film]):
-        super().__init__(timeout=300)
+        super().__init__(timeout=SELECTION_TIMEOUT)
+
+        self.message = None
 
         # Create the select menu options
         options = []
@@ -274,6 +278,22 @@ class MovieSelectionView(discord.ui.View):
 
         # Add the Select menu to the view
         self.add_item(MovieSelect(options=options, films=films))
+
+    async def on_timeout(self):
+        reply = EmbedReply(
+            "Movie Showtimes - Select A Movie - Timed Out",
+            "movies",
+            True,
+            description="Movie selection timed out. Please retry this command.",
+        )
+
+        reply.set_thumbnail(url="attachment://cinema-logo.jpg")
+
+        try:
+            if self.message:
+                await self.message.edit(embed=reply, view=None)
+        except discord.NotFound:
+            pass  # message already deleted/edited elsewhere
 
 
 class MovieSelect(discord.ui.Select):
@@ -302,6 +322,13 @@ class MovieSelect(discord.ui.Select):
 
         reply.add_field(name="Runtime", value=f"{round(selectedFilm.duration)} mins")
 
+        reply.add_field(
+            name="Released On",
+            value=dates.formatSimpleDate(
+                selectedFilm.releaseDate, discordDateFormat="D"
+            ),
+        )
+
         reply.add_field(name="Directed By", value=selectedFilm.director)
 
         reply.add_field(name="Cast", value=selectedFilm.cast)
@@ -314,8 +341,9 @@ class MovieSelect(discord.ui.Select):
 
 class DateSelectView(discord.ui.View):
     def __init__(self, film: Film):
-        super().__init__(timeout=300)
+        super().__init__(timeout=SELECTION_TIMEOUT)
         self.film = film  # Store the film for the callback
+        self.message = None
 
         # Create options from the film's sessions
         options = []
@@ -366,16 +394,11 @@ class DateSelect(discord.ui.Select):
         )
         embed.set_thumbnail(url=self.film.image)
 
-        # This is the most important part:
-        # Add one Field for each "Experience" (e.g., "Standard", "3D", "VIP")
         for experience in selected_session.experiences:
-            # Get the name of the experience (e.g., "Standard")
-            # Assumes one attribute per experience, or you can join them
             experience_name = " | ".join([attr.name for attr in experience.attributes])
             if not experience_name:
                 experience_name = "Showtimes"  # Fallback
 
-            # Format all the times for this experience
             time_strings = []
             for time_obj in experience.times:
                 if time_obj.expired:
