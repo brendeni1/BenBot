@@ -43,96 +43,145 @@ def formatSeconds(seconds: int):
 
 
 def formatSimpleDate(
-    timestamp: str | datetime.datetime = None,
+    timestamp: str | datetime.datetime | datetime.date = None,
     *,
     formatString: str = None,
     includeTime: bool = True,
     timeNow: bool = False,
-    discordDateFormat: str = None
+    discordDateFormat: str = None,
 ) -> str:
     """
-    Format a date or datetime object into a readable string (Jan 1 1970) or Discord's rich timestamp format.
+    Format a date, datetime object, or string into a readable string or Discord's rich timestamp format.
 
     Parameters
     ----------
-    timestamp : str | datetime.datetime, optional
-        The date/time to format. Can be a datetime object or a string parsable by dateutil.
-        If omitted, `timeNow` must be True.
+    timestamp : str | datetime.datetime | datetime.date, optional
+        The date/time to format. Can be a datetime object, date object, or a
+        string parsable by dateutil. If omitted, `timeNow` must be True.
 
     formatString : str, optional
-        A custom strftime format string. If provided, this takes priority over `includeTime`.
+        A custom strftime format string. If provided, this takes priority.
+        Note: Using time directives (e.g., %H, %M) with a `date` object
+        will raise a ValueError.
 
     includeTime : bool, default=True
-        Whether to include the time component in the formatted output
-        (ignored if `formatString` or `discordDateFormat` is provided).
+        Whether to include the time component. Ignored if `formatString` or
+        `discordDateFormat` is provided. Will be forced to False if
+        the input `timestamp` is a `datetime.date` object.
 
     timeNow : bool, default=False
         If True, uses the current system time instead of requiring a `timestamp`.
 
     discordDateFormat : str, optional
-        A Discord timestamp style code. If provided, returns the datetime as a Discord
-        rich timestamp (e.g. "<t:1632765600:F>"). Takes precedence over `formatString`
-        and `includeTime`.
-
-        Supported codes:
-        - "t" → short time (e.g. 9:41 PM)
-        - "T" → long time with seconds (e.g. 9:41:30 PM)
-        - "d" → short date (e.g. 09/27/2025)
-        - "D" → long date (e.g. September 27, 2025)
-        - "f" → short date/time (e.g. September 27, 2025 9:41 PM)
-        - "F" → long date/time (e.g. Saturday, September 27, 2025 9:41 PM)
-        - "R" → relative time (e.g. "in 2 years", "3 days ago")
+        A Discord timestamp style code (e.g., "F", "R"). Takes precedence.
+        (See original docstring for full list)
 
     Returns
     -------
     str
-        A formatted string representation of the date. Either:
-        - Discord rich timestamp format if `discordDateFormat` is given
-        - Custom strftime format if `formatString` is given
-        - Default human-readable format (with or without time)
+        A formatted string representation of the date.
 
     Raises
     ------
     ValueError
         If no timestamp is provided and `timeNow` is False.
+    TypeError
+        If the timestamp type is unsupported.
     """
+
+    # --- 1. Resolve input to a date or datetime object ---
+    obj: datetime.datetime | datetime.date
+
     if not timestamp and not timeNow:
-        raise ValueError("No timestamp provided to src.utils.dates.formatSimpleDate.")
+        raise ValueError("No timestamp provided to formatSimpleDate.")
 
     if timeNow:
-        timestamp = datetime.datetime.now()
+        obj = datetime.datetime.now()
+    elif isinstance(timestamp, (datetime.datetime, datetime.date)):
+        obj = timestamp
+    elif isinstance(timestamp, str):
+        obj = parser.parse(timestamp)
+    else:
+        raise TypeError(f"Unsupported timestamp type: {type(timestamp)}")
 
-    if not isinstance(timestamp, datetime.datetime):
-        timestamp = parser.parse(timestamp)
+    # Check if the resolved object has a time component.
+    # datetime.datetime is a subclass of datetime.date, so we check
+    # if it's an instance of the more specific datetime.datetime.
+    has_time_component = isinstance(obj, datetime.datetime)
 
+    # --- 2. Handle Discord Format (requires a datetime) ---
     if discordDateFormat:
-        unix_ts = int(timestamp.timestamp())
+        dt_for_discord: datetime.datetime
+        if has_time_component:
+            dt_for_discord = obj
+        else:
+            # Convert pure date to datetime at midnight
+            dt_for_discord = datetime.datetime.combine(obj, datetime.time.min)
+
+        unix_ts = int(dt_for_discord.timestamp())
         return f"<t:{unix_ts}:{discordDateFormat}>"
 
+    # --- 3. Handle Custom Format String ---
     if formatString:
-        return timestamp.strftime(formatString)
+        # Let user be responsible for format string compatibility
+        return obj.strftime(formatString)
 
-    if includeTime:
-        formattedDate = timestamp.strftime("%b %#d %Y %#I:%M %p")
+    # --- 4. Handle Default Formatting ---
+    # Include time only if requested AND available
+    if includeTime and has_time_component:
+        # Original format with time (using %# for platform-specific no-zero-padding)
+        formattedDate = obj.strftime("%b %#d %Y %#I:%M %p")
     else:
-        formattedDate = timestamp.strftime("%b %#d %Y")
+        # Date-only format
+        formattedDate = obj.strftime("%b %#d %Y")
 
     return formattedDate
 
 
 def simpleDateObj(
-    timestamp: None | datetime.datetime | str = None, *, timeNow: bool = False
+    timestamp: None | datetime.datetime | datetime.date | str = None,
+    *,
+    timeNow: bool = False,
 ) -> datetime.datetime:
+    """
+    Ensures a datetime.datetime object is returned from various inputs.
+
+    Parameters
+    ----------
+    timestamp : None | datetime.datetime | datetime.date | str, optional
+        The input to convert. Can be a datetime, date, string, or None.
+    timeNow : bool, default=False
+        If True, uses the current system time instead of requiring a `timestamp`.
+
+    Returns
+    -------
+    datetime.datetime
+        A datetime object. If input was a `date`, time is set to midnight.
+
+    Raises
+    ------
+    ValueError
+        If no timestamp is provided and `timeNow` is False.
+    TypeError
+        If the timestamp type is unsupported.
+    """
     if not timestamp and not timeNow:
-        raise ValueError("No timestamp provided to src.utils.dates.simpleDateObj.")
+        raise ValueError("No timestamp provided to simpleDateObj.")
 
     if timeNow:
-        timestamp = datetime.datetime.now()
+        return datetime.datetime.now()
 
-    if not isinstance(timestamp, datetime.datetime):
-        timestamp = timestamp = parser.parse(timestamp)
+    if isinstance(timestamp, datetime.datetime):
+        return timestamp
 
-    return timestamp
+    if isinstance(timestamp, datetime.date):
+        # Convert date to datetime at midnight (start of the day)
+        return datetime.datetime.combine(timestamp, datetime.time.min)
+
+    if isinstance(timestamp, str):
+        return parser.parse(timestamp)
+
+    raise TypeError(f"Unsupported timestamp type: {type(timestamp)}")
 
 
 def deltaInSeconds(
@@ -176,3 +225,15 @@ def deltaInSeconds(
     delta = timestamp1 - timestamp2
 
     return delta.total_seconds()
+
+
+def dateRange(
+    start: datetime.datetime,
+    end: datetime.datetime,
+    step: datetime.timedelta = datetime.timedelta(days=1),
+):
+    current = start
+
+    while current <= end:
+        yield current
+        current += step
