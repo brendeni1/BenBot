@@ -8,6 +8,7 @@ from src.classes import *
 from src import constants
 
 from src.utils import movies
+from src.utils import images
 from src.utils import dates
 
 DEFAULT_CHAIN = "Landmark"
@@ -138,18 +139,67 @@ class Movies(commands.Cog):
                         "If setting `chain`, `province`, or `location` manually, you must set all 3 explicitly!"
                     )
 
-            chain = chain or DEFAULT_CHAIN
-            province = province or DEFAULT_PROVINCE
-            location = location or DEFAULT_LOCATION
+            chain: str = chain or DEFAULT_CHAIN
+            province: str = province or DEFAULT_PROVINCE
+            location: str = location or DEFAULT_LOCATION
+
+            locationObj = next(
+                filter(
+                    lambda x: x["id"] == location,
+                    constants.MOVIE_CINEMAS[chain][province],
+                )
+            )
+
+            slug = locationObj["slug"]
+
+            if chain not in constants.MOVIE_CINEMAS.keys():
+                raise Exception("Invalid movie chain selected! Try again.")
+            elif province not in constants.MOVIE_CINEMAS[chain].keys():
+                raise Exception("Invalid province selected! Try again.")
+            elif location not in [
+                location["id"] for location in constants.MOVIE_CINEMAS[chain][province]
+            ]:
+                raise Exception("Invalid location selected! Try again.")
 
             start_date = (
-                dates.simpleDateObj(start_date) or datetime.date.today()
+                dates.simpleDateObj(start_date or datetime.date.today())
             ).date()
 
-            await ctx.respond(
-                f"You picked **{chain} → {province} → {location}** for start date {dates.formatSimpleDate(start_date)}"
+            rawShowtimeData = movies.fetchShowtimes(chain, location)
+
+            parsedShowtimeData = await movies.parseShowtimes(
+                rawShowtimeData, chain, province, locationObj
             )
+
+            if chain == "Landmark":
+                reply = EmbedReply(
+                    "Movie Showtimes - Select A Movie",
+                    "movies",
+                    description="Select a movie from the dropdown below to view available showtimes.",
+                    url=f"https://www.landmarkcinemas.com/showtimes/{slug}",
+                )
+
+                thumbnail = await images.fetchToFile(
+                    "https://www.landmarkcinemas.com/media/380058/landmark-cinemas.jpg",
+                    "landmark-logo.jpg",
+                )
+
+                reply.set_thumbnail(url="attachment://landmark-logo.jpg")
+
+            else:
+                raise Exception("Invalid chain passed to showtimes.")
+
+            reply.add_field(name="Chain", value=chain)
+
+            reply.add_field(
+                name="Location", value=f"{locationObj["location"]}, {province}"
+            )
+
+            movieSelectView = movies.MovieSelectionView(films=parsedShowtimeData)
+
+            await ctx.respond(embed=reply, view=movieSelectView, file=thumbnail)
         except Exception as e:
+            raise e
             reply = EmbedReply(
                 "Movie Showtimes - Error", "movies", True, description=f"Error: {e}"
             )
