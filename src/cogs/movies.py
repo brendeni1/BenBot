@@ -161,6 +161,8 @@ class Movies(commands.Cog):
             ]:
                 raise Exception("Invalid location selected! Try again.")
 
+            await ctx.defer()
+
             start_date = (
                 dates.simpleDateObj(start_date or datetime.date.today())
             ).date()
@@ -197,11 +199,11 @@ class Movies(commands.Cog):
 
             movieSelectView = movies.MovieSelectionView(films=parsedShowtimeData)
 
-            selectionResponse = await ctx.respond(
+            selectionResponse = await ctx.send_followup(
                 embed=reply, view=movieSelectView, file=thumbnail
             )
 
-            movieSelectView.message = await selectionResponse.original_response()
+            movieSelectView.message = selectionResponse
         except Exception as e:
             raise e
             reply = EmbedReply(
