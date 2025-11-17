@@ -164,10 +164,12 @@ class Film:
                         attribute.getEmojiForAttribute() if emojis else attribute.name
                     )
 
-                    if display not in results:
-                        results.append(display)
+                    if display not in [result[0] for result in results]:
+                        results.append((display, attribute.precedence))
 
-        return results
+        results.sort(key=lambda d: d[1])
+
+        return [result[0] for result in results]
 
 
 def fetchShowtimes(chain: str, location: str) -> dict:
@@ -277,12 +279,23 @@ async def parseShowtimes(
 
                     # PARSE EXPERIENCE ATTRIBUTES
                     for rawExperienceAttribute in sorted(
-                        rawExperience["ExperienceAttributes"], key=lambda a: a["Order"]
+                        rawExperience["ExperienceAttributes"],
+                        key=lambda a: (
+                            a["Order"]
+                            if a["Id"]
+                            not in constants.MOVIE_EXPERIENCE_ATTRIBUTE_ORDER_OVERRIDES
+                            else 1.5
+                        ),
                     ):
                         rawAttributeID = rawExperienceAttribute["Id"]
                         rawName = rawExperienceAttribute["Name"]
                         rawDescription = rawExperienceAttribute["Description"]
-                        rawPrecedence = rawExperienceAttribute["Order"]
+                        rawPrecedence = (
+                            rawExperienceAttribute["Order"]
+                            if rawExperienceAttribute["Id"]
+                            not in constants.MOVIE_EXPERIENCE_ATTRIBUTE_ORDER_OVERRIDES
+                            else 1.5
+                        )
 
                         attributeObject = ExperienceAttribute(
                             id=rawAttributeID,
@@ -495,7 +508,9 @@ class DateSelectView(discord.ui.View):
         for session in film.sessions:
             dateOptions.append(
                 discord.SelectOption(
-                    label=dates.formatSimpleDate(session.date, includeTime=False),
+                    label=dates.formatSimpleDate(
+                        session.date, includeTime=False, relativity=True
+                    ),
                     value=session.date.isoformat(),
                     default=session.date == self.preSelectedDate,
                 )

@@ -49,6 +49,7 @@ def formatSimpleDate(
     includeTime: bool = True,
     timeNow: bool = False,
     discordDateFormat: str = None,
+    relativity: bool = True,
 ) -> str:
     """
     Format a date, datetime object, or string into a readable string or Discord's rich timestamp format.
@@ -83,6 +84,9 @@ def formatSimpleDate(
         - "f" → short date/time (e.g. September 27, 2025 9:41 PM)
         - "F" → long date/time (e.g. Saturday, September 27, 2025 9:41 PM)
         - "R" → relative time (e.g. "in 2 years", "3 days ago")
+
+    relativity : bool, default=False
+        If True, returns Yesterday/Today/Tomorrow for such dates instead of full date. Otherwise full date.
 
     Returns
     -------
@@ -134,16 +138,46 @@ def formatSimpleDate(
         # Let user be responsible for format string compatibility
         return obj.strftime(formatString)
 
-    # --- 4. Handle Default Formatting ---
+    # --- 4. Handle Default Formatting (MODIFIED SECTION) ---
+
+    date_part_str = ""
+    time_part_str = ""
+
+    # --- 4a. Resolve Date Part with Relativity ---
+    if relativity:
+        today = datetime.date.today()
+
+        # Get just the date part of the input object
+        input_date = obj.date() if has_time_component else obj
+
+        delta_days = (input_date - today).days
+
+        if delta_days == 0:
+            date_part_str = "Today"
+        elif delta_days == -1:
+            date_part_str = "Yesterday"
+        elif delta_days == 1:
+            date_part_str = "Tomorrow"
+        else:
+            # Fallback for dates not Yesterday/Today/Tomorrow
+            date_part_str = obj.strftime("%b %#d %Y")
+    else:
+        # Standard date formatting
+        date_part_str = obj.strftime("%b %#d %Y")
+
+    # --- 4b. Resolve Time Part ---
     # Include time only if requested AND available
     if includeTime and has_time_component:
-        # Original format with time (using %# for platform-specific no-zero-padding)
-        formattedDate = obj.strftime("%b %#d %Y %#I:%M %p")
-    else:
-        # Date-only format
-        formattedDate = obj.strftime("%b %#d %Y")
+        # Use strftime directives for 12-hour clock, minute, and AM/PM
+        # (%#I on Windows, %-I on Linux/macOS to remove leading zero)
+        # Using %#I as it was in your original.
+        time_part_str = obj.strftime("%#I:%M %p")
 
-    return formattedDate
+    # --- 4c. Combine and Return ---
+    if time_part_str:
+        return f"{date_part_str} {time_part_str}"
+    else:
+        return date_part_str
 
 
 def simpleDateObj(

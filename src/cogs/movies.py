@@ -69,15 +69,7 @@ async def startDateAutocomplete(ctx: discord.AutocompleteContext):
 
     formattedNowToEndRange = [
         discord.OptionChoice(
-            name=(
-                "Today"
-                if date == now
-                else (
-                    "Tomorrow"
-                    if date == now + datetime.timedelta(days=1)
-                    else dates.formatSimpleDate(date)
-                )
-            ),
+            name=dates.formatSimpleDate(date, includeTime=False, relativity=True),
             value=date.isoformat(),
         )
         for date in nowToEndRange
