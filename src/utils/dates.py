@@ -160,10 +160,10 @@ def formatSimpleDate(
             date_part_str = "Tomorrow"
         else:
             # Fallback for dates not Yesterday/Today/Tomorrow
-            date_part_str = obj.strftime("%b %#d %Y")
+            date_part_str = obj.strftime("%b %-d %Y")
     else:
         # Standard date formatting
-        date_part_str = obj.strftime("%b %#d %Y")
+        date_part_str = obj.strftime("%b %-d %Y")
 
     # --- 4b. Resolve Time Part ---
     # Include time only if requested AND available
@@ -171,7 +171,7 @@ def formatSimpleDate(
         # Use strftime directives for 12-hour clock, minute, and AM/PM
         # (%#I on Windows, %-I on Linux/macOS to remove leading zero)
         # Using %#I as it was in your original.
-        time_part_str = obj.strftime("%#I:%M %p")
+        time_part_str = obj.strftime("%-I:%M %p")
 
     # --- 4c. Combine and Return ---
     if time_part_str:
