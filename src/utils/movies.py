@@ -203,7 +203,7 @@ def fetchShowtimes(chain: str, location: str) -> dict:
 
 
 async def parseShowtimes(
-    rawData: dict, chain, province, location, startDate: datetime.date
+    rawData: dict, chain, province, location, startDate: datetime.date | None
 ) -> list[Film]:
     parsed = []
 
@@ -268,7 +268,7 @@ async def parseShowtimes(
 
                 convertedDate = dates.simpleDateObj(rawDate).date()
 
-                if convertedDate < startDate:
+                if startDate and convertedDate != startDate:
                     continue
 
                 sessionObject = Session(date=convertedDate)
@@ -340,6 +340,11 @@ async def parseShowtimes(
     else:
         raise Exception("Invalid chain passed to parseShowtimes")
 
+    if len(parsed) < 1:
+        raise Exception(
+            f"No films were found on or after {dates.formatSimpleDate(startDate if startDate else "Today", discordDateFormat="D")}."
+        )
+
     return parsed
 
 
@@ -380,7 +385,7 @@ class MovieSelectionView(discord.ui.View):
                 discord.SelectOption(
                     label=text.truncateString(film.name, 100)[0],
                     description=text.truncateString(
-                        f"Release: {dates.formatSimpleDate(film.releaseDate, includeTime=False)} · Runtime: {round(film.duration)} mins",
+                        f"Next Show: {dates.formatSimpleDate(film.sessions[0].date, includeTime=False)} · Release: {dates.formatSimpleDate(film.releaseDate, includeTime=False)} · Runtime: {round(film.duration)} mins",
                         100,
                     )[0],
                     value=str(film.id),
@@ -443,7 +448,42 @@ class MovieSelect(discord.ui.Select):
             inline=False,
         )
 
-        # Edit the original message with the new embed and new view
+        # --- NEW LOGIC ---
+        # If a date was pre-selected, find that session and add its
+        # showtimes to the embed *before* sending the message.
+        if self.preSelectedDate:
+            try:
+                selectedSession = next(
+                    filter(
+                        lambda s: s.date == self.preSelectedDate,
+                        selectedFilm.sessions,
+                    )
+                )
+
+                # Add showtime fields for the pre-selected date
+                for idx, experience in enumerate(selectedSession.experiences, start=1):
+                    name = (
+                        f"Experience {idx} {experience.getMostProminentAttributeName()}"
+                    )
+
+                    times = [
+                        f"— {dates.formatSimpleDate(time.time, discordDateFormat='t')} · {time.screen.title()}"
+                        for time in experience.times
+                    ]
+
+                    reply.add_field(
+                        name=name,
+                        value=f"{' '.join(experience.listExperienceDisplays())}\n{text.truncateString('\n'.join(times), 1000)[0]}",
+                        inline=False,
+                    )
+            except StopIteration:
+                # Should not happen if data is valid, but if it does,
+                # just proceed without adding showtimes.
+                pass
+        # --- END NEW LOGIC ---
+
+        # Edit the original message with the new embed (now with showtimes)
+        # and the new view.
         await interaction.response.edit_message(
             embed=reply, view=dateView, file=selectedFilm.image
         )
@@ -467,17 +507,20 @@ class MovieSelectInDetails(discord.ui.Select):
         self.films = films
         super().__init__(placeholder="Select a movie...", options=options)
 
-    async def callback(
-        self, interaction: discord.Interaction
-    ):  # MODIFIED: Added type hint
-        # FIX 1: Stop the old view to prevent "stacking timeouts"
+    async def callback(self, interaction: discord.Interaction):
         self.view.stop()
 
         filmID = int(self.values[0])
         newFilm = next(f for f in self.films if f.id == filmID)
 
+        # --- MODIFICATION ---
+        # Pass the preSelectedDate from the *current* view to the new view
+        # so the default selection is maintained when switching films.
         newView = DateSelectView(
-            film=newFilm, films=self.films, message=self.view.message
+            film=newFilm,
+            films=self.films,
+            message=self.view.message,
+            preSelectedDate=self.view.preSelectedDate,
         )
 
         embed = MovieDetailsEmbedReply(newFilm)
@@ -488,17 +531,50 @@ class MovieSelectInDetails(discord.ui.Select):
             inline=False,
         )
 
+        # --- MODIFICATION ---
+        # Re-run the pre-selection logic just like in MovieSelect.callback
+        # to show showtimes immediately for the new film on the same date.
+        if self.view.preSelectedDate:
+            try:
+                selectedSession = next(
+                    filter(
+                        lambda s: s.date == self.view.preSelectedDate,
+                        newFilm.sessions,
+                    )
+                )
+                for idx, experience in enumerate(selectedSession.experiences, start=1):
+                    name = (
+                        f"Experience {idx} {experience.getMostProminentAttributeName()}"
+                    )
+                    times = [
+                        f"— {dates.formatSimpleDate(time.time, discordDateFormat='t')} · {time.screen.title()}"
+                        for time in experience.times
+                    ]
+                    embed.add_field(
+                        name=name,
+                        value=f"{' '.join(experience.listExperienceDisplays())}\n{text.truncateString('\n'.join(times), 1000)[0]}",
+                        inline=False,
+                    )
+            except StopIteration:
+                pass  # No sessions for this date on the new film
+        # --- END MODIFICATION ---
+
         await interaction.response.edit_message(embed=embed, view=newView)
 
 
 class DateSelectView(discord.ui.View):
-    def __init__(self, film: Film, films: list[Film], message, preSelectedDate):
+    def __init__(
+        self,
+        film: Film,
+        films: list[Film],
+        message: discord.WebhookMessage,
+        preSelectedDate: datetime.date | None,
+    ):
         super().__init__(timeout=SELECTION_TIMEOUT)
         self.film = film
         self.films = films
         self.message = message
-
-        self.preSelectedDate = None
+        self.preSelectedDate = preSelectedDate
 
         # movie picker - CURRNETLY HIDDEN BECAUSE DISCORD FILE UPLOAD LIMITATIONS
         # self.add_item(MovieSelectInDetails(films, film))
@@ -512,39 +588,61 @@ class DateSelectView(discord.ui.View):
                         session.date, includeTime=False, relativity=True
                     ),
                     value=session.date.isoformat(),
-                    default=session.date == self.preSelectedDate,
+                    # This default flag is set based on the passed date
+                    default=(
+                        session.date == self.preSelectedDate
+                        if self.preSelectedDate
+                        else False
+                    ),
                 )
             )
 
-        self.add_item(DateSelect(dateOptions, film))
+        selectItem = DateSelect(dateOptions, film, message)
+        self.add_item(selectItem)
+
+        # The initDate() call is no longer needed here, as the logic
+        # is now handled in MovieSelect.callback before this view is sent.
 
     async def on_timeout(self):
         try:
             if self.message:
                 self.disable_all_items()
-
                 await self.message.edit(view=self)
         except discord.NotFound:
             pass  # message already deleted/edited elsewhere
 
 
 class DateSelect(discord.ui.Select):
-    def __init__(self, options: list[discord.SelectOption], film: Film):
+    def __init__(
+        self,
+        options: list[discord.SelectOption],
+        film: Film,
+        message: discord.WebhookMessage,
+    ):
         self.film = film
+        self.message = message
         super().__init__(placeholder="Select a date...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        selectedDate = self.values[0]
+        selectedDateStr = self.values[0]
+        selectedDate = dates.simpleDateObj(selectedDateStr).date()
 
-        # Update default flags in-place
         for opt in self.options:
-            opt.default = opt.value == selectedDate
+            opt.default = opt.value == selectedDateStr
+
+        self.view.preSelectedDate = selectedDate
 
         reply = MovieDetailsEmbedReply(self.film)
 
+        reply.add_field(
+            name="Available Experiences",
+            value=" ".join(self.film.allAvailableExperienceDisplays()),
+            inline=False,
+        )
+
         selectedSession = next(
             filter(
-                lambda s: s.date == dates.simpleDateObj(selectedDate).date(),
+                lambda s: s.date == selectedDate,
                 self.film.sessions,
             )
         )

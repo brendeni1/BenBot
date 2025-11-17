@@ -101,7 +101,7 @@ class Movies(commands.Cog):
         ctx: discord.ApplicationContext,
         start_date: discord.Option(
             input_type=str,
-            description="Date to start looking for showtimes on.",
+            description="Date to view showtimes for. If omitted, all showtimes are shown.",
             autocomplete=startDateAutocomplete,
             required=False,
         ),  # type: ignore
@@ -155,9 +155,8 @@ class Movies(commands.Cog):
 
             await ctx.defer()
 
-            start_date = (
-                dates.simpleDateObj(start_date or datetime.date.today())
-            ).date()
+            if start_date:
+                start_date = dates.simpleDateObj(start_date).date()
 
             rawShowtimeData = movies.fetchShowtimes(chain, location)
 
