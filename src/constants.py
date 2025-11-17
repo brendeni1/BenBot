@@ -125,3 +125,8 @@ MOVIE_EXPERIENCE_ATTRIBUTE_EMOJIS = {
     "18+": "<:landmark18:1438624988318924902>",
     "EnglishSub": "<:landmarkenglishsub:1438624989262647356>",
 }
+
+MOVIE_EXPERIENCE_ATTRIBUTE_IGNORES = [
+    "CC",
+    "DVS",
+]

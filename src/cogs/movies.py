@@ -170,7 +170,7 @@ class Movies(commands.Cog):
             rawShowtimeData = movies.fetchShowtimes(chain, location)
 
             parsedShowtimeData = await movies.parseShowtimes(
-                rawShowtimeData, chain, province, locationObj
+                rawShowtimeData, chain, province, locationObj, startDate=start_date
             )
 
             if chain == "Landmark":
@@ -197,7 +197,9 @@ class Movies(commands.Cog):
                 name="Location", value=f"{locationObj["location"]}, {province}"
             )
 
-            movieSelectView = movies.MovieSelectionView(films=parsedShowtimeData)
+            movieSelectView = movies.MovieSelectionView(
+                films=parsedShowtimeData, preSelectedDate=start_date
+            )
 
             selectionResponse = await ctx.send_followup(
                 embed=reply, view=movieSelectView, file=thumbnail

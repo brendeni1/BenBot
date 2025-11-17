@@ -30,11 +30,13 @@ class ExperienceTime:
         soldOut: bool,
         expired: bool,
         screen: str,
+        id: str,
         time: datetime.datetime,
     ):
         self.soldOut = soldOut
         self.expired = expired
         self.screen = screen
+        self.id = id
         self.time = time
         self.experience = None
 
@@ -59,20 +61,36 @@ class Experience:
 
         self.times.append(experienceTime)
 
-    def listExperienceIDS(self, emojis: bool = True) -> set[str]:
+    def listExperienceDisplays(
+        self, emojis: bool = True, ignoreUnnessecary: bool = False
+    ) -> set[str]:
         results = []
 
-        for attribute in sorted(self.attributes, key=lambda e: e.precedence):
+        for attribute in self.attributes:
+            if (
+                ignoreUnnessecary
+                and attribute.id in constants.MOVIE_EXPERIENCE_ATTRIBUTE_IGNORES
+            ):
+                continue
+
             emoji = attribute.getEmojiForAttribute()
 
             results.append(emoji if emojis and emoji else attribute.name)
 
         return results
 
+    def getMostProminentAttributeName(self, emoji: bool = False) -> str:
+        if self.attributes:
+            selected = self.attributes[0]
+
+            return f"({selected.name.title() if not emoji else selected.getEmojiForAttribute()})"
+        else:
+            return ""
+
 
 class Session:
     def __init__(
-        self, date: datetime.datetime, experiences: list[Experience] | None = None
+        self, date: datetime.date, experiences: list[Experience] | None = None
     ):
         self.date = date
         self.experiences = experiences if experiences is not None else []
@@ -128,26 +146,28 @@ class Film:
 
         self.sessions.append(session)
 
-    def allAvailableExperienceID(self, emojis: bool = True) -> list[str]:
-        results = dict()
+    def allAvailableExperienceDisplays(
+        self, emojis: bool = True, ignoreUnnessecary: bool = False
+    ) -> list[str]:
+        results = []
 
         for session in self.sessions:
             for experience in session.experiences:
-                for attribute in sorted(
-                    experience.attributes, key=lambda e: e.precedence
-                ):
-                    emoji = attribute.getEmojiForAttribute()
+                for attribute in experience.attributes:
+                    if (
+                        ignoreUnnessecary
+                        and attribute.id in constants.MOVIE_EXPERIENCE_ATTRIBUTE_IGNORES
+                    ):
+                        continue
 
-                    results[attribute.id] = {
-                        "precedence": attribute.precedence,
-                        "text": emoji if emojis and emoji else attribute.name,
-                    }
+                    display = (
+                        attribute.getEmojiForAttribute() if emojis else attribute.name
+                    )
 
-        # Sort by precedence (a[1]['precedence']) and return the text (result[1]['text'])
-        return [
-            result[1]["text"]
-            for result in sorted(results.items(), key=lambda a: a[1]["precedence"])
-        ]
+                    if display not in results:
+                        results.append(display)
+
+        return results
 
 
 def fetchShowtimes(chain: str, location: str) -> dict:
@@ -180,11 +200,21 @@ def fetchShowtimes(chain: str, location: str) -> dict:
         raise Exception("Invalid chain passed to fetchShowtimes")
 
 
-async def parseShowtimes(rawData: dict, chain, province, location) -> list[Film]:
+async def parseShowtimes(
+    rawData: dict, chain, province, location, startDate: datetime.date
+) -> list[Film]:
     parsed = []
 
     if chain == "Landmark":
-        for rawFilmData in rawData:
+        for rawFilmData in sorted(
+            rawData,
+            key=lambda f: sum(
+                len(exp["Times"])
+                for session in f["Sessions"]
+                for exp in session["ExperienceTypes"]
+            ),
+            reverse=True,
+        ):
             rawFilmID = rawFilmData["FilmId"]
             rawName = rawFilmData["Title"]
             friendlyName = rawFilmData["FriendlyName"]
@@ -234,7 +264,10 @@ async def parseShowtimes(rawData: dict, chain, province, location) -> list[Film]
             for rawSessionData in rawFilmData["Sessions"]:
                 rawDate = rawSessionData["Date"]
 
-                convertedDate = dates.simpleDateObj(rawDate)
+                convertedDate = dates.simpleDateObj(rawDate).date()
+
+                if convertedDate < startDate:
+                    continue
 
                 sessionObject = Session(date=convertedDate)
 
@@ -243,7 +276,9 @@ async def parseShowtimes(rawData: dict, chain, province, location) -> list[Film]
                     experienceObject = Experience()
 
                     # PARSE EXPERIENCE ATTRIBUTES
-                    for rawExperienceAttribute in rawExperience["ExperienceAttributes"]:
+                    for rawExperienceAttribute in sorted(
+                        rawExperience["ExperienceAttributes"], key=lambda a: a["Order"]
+                    ):
                         rawAttributeID = rawExperienceAttribute["Id"]
                         rawName = rawExperienceAttribute["Name"]
                         rawDescription = rawExperienceAttribute["Description"]
@@ -263,18 +298,20 @@ async def parseShowtimes(rawData: dict, chain, province, location) -> list[Film]
                         rawTime = rawExperienceTime["StartTime"]
                         convertedTime = dates.simpleDateObj(rawTime)
                         convertedDateTime = datetime.datetime.combine(
-                            convertedDate.date(), convertedTime.time()
+                            convertedDate, convertedTime.time()
                         )
 
                         rawSoldOut = rawExperienceTime["SoldOut"]
                         rawSessionExpired = rawExperienceTime["SessionExpired"]
                         rawScreen = rawExperienceTime["Screen"]
+                        rawID = rawExperienceTime["Scheduleid"]
 
                         timeObject = ExperienceTime(
                             soldOut=rawSoldOut,
                             expired=rawSessionExpired,
                             screen=rawScreen,
                             time=convertedDateTime,
+                            id=rawID,
                         )
 
                         experienceObject.addExperienceTime(timeObject)
@@ -282,6 +319,9 @@ async def parseShowtimes(rawData: dict, chain, province, location) -> list[Film]
                     sessionObject.addExperience(experienceObject)
 
                 filmObject.addSession(sessionObject)
+
+            if len(filmObject.sessions) < 1:
+                continue
 
             parsed.append(filmObject)
     else:
@@ -304,7 +344,7 @@ class MovieDetailsEmbedReply(EmbedReply):
         self.add_field(name="Runtime", value=f"{round(film.duration)} mins")
 
         self.add_field(
-            name="Released On",
+            name="Release Date",
             value=dates.formatSimpleDate(film.releaseDate, discordDateFormat="D"),
         )
 
@@ -314,7 +354,7 @@ class MovieDetailsEmbedReply(EmbedReply):
 
 
 class MovieSelectionView(discord.ui.View):
-    def __init__(self, films: list[Film]):
+    def __init__(self, films: list[Film], preSelectedDate: datetime.date):
         super().__init__(timeout=SELECTION_TIMEOUT)
 
         self.message: discord.WebhookMessage = None
@@ -327,14 +367,17 @@ class MovieSelectionView(discord.ui.View):
                 discord.SelectOption(
                     label=text.truncateString(film.name, 100)[0],
                     description=text.truncateString(
-                        f"Runtime: {round(film.duration)} mins", 100
+                        f"Release: {dates.formatSimpleDate(film.releaseDate, includeTime=False)} · Runtime: {round(film.duration)} mins",
+                        100,
                     )[0],
                     value=str(film.id),
                 )
             )
 
         # Add the Select menu to the view
-        self.add_item(MovieSelect(options=options, films=films))
+        self.add_item(
+            MovieSelect(options=options, films=films, preSelectedDate=preSelectedDate)
+        )
 
     async def on_timeout(self):
         reply = EmbedReply(
@@ -358,8 +401,10 @@ class MovieSelect(discord.ui.Select):
         self,
         options: list[discord.SelectOption],
         films: list[Film],
+        preSelectedDate: datetime.date,
     ):
         # Save all films for later use
+        self.preSelectedDate = preSelectedDate
         self.allFilms = films
         super().__init__(placeholder="Select a movie...", options=options)
 
@@ -371,14 +416,17 @@ class MovieSelect(discord.ui.Select):
         self.view.stop()
 
         dateView = DateSelectView(
-            film=selectedFilm, films=self.allFilms, message=self.view.message
+            film=selectedFilm,
+            films=self.allFilms,
+            message=self.view.message,
+            preSelectedDate=self.preSelectedDate,
         )
 
         reply = MovieDetailsEmbedReply(selectedFilm)
 
         reply.add_field(
             name="Available Experiences",
-            value=" ".join(selectedFilm.allAvailableExperienceID()),
+            value=" ".join(selectedFilm.allAvailableExperienceDisplays()),
             inline=False,
         )
 
@@ -415,35 +463,29 @@ class MovieSelectInDetails(discord.ui.Select):
         filmID = int(self.values[0])
         newFilm = next(f for f in self.films if f.id == filmID)
 
-        # This line (from your original code) creates a new view,
-        # which correctly clears the old date selection.
         newView = DateSelectView(
             film=newFilm, films=self.films, message=self.view.message
         )
 
         embed = MovieDetailsEmbedReply(newFilm)
 
-        # FIX 2: Add the "Available Experiences" field that was missing
         embed.add_field(
             name="Available Experiences",
-            value=" ".join(newFilm.allAvailableExperienceID()),
+            value=" ".join(newFilm.allAvailableExperienceDisplays()),
             inline=False,
         )
 
-        # Edit message with new embed and view.
-        # Per request, image changes are reverted, so no file is attached here.
-        # This means the poster image will NOT update.
         await interaction.response.edit_message(embed=embed, view=newView)
 
 
 class DateSelectView(discord.ui.View):
-    def __init__(self, film, films, message):
+    def __init__(self, film: Film, films: list[Film], message, preSelectedDate):
         super().__init__(timeout=SELECTION_TIMEOUT)
         self.film = film
         self.films = films
         self.message = message
 
-        self.previousSelectedDate = None
+        self.preSelectedDate = None
 
         # movie picker - CURRNETLY HIDDEN BECAUSE DISCORD FILE UPLOAD LIMITATIONS
         # self.add_item(MovieSelectInDetails(films, film))
@@ -455,6 +497,7 @@ class DateSelectView(discord.ui.View):
                 discord.SelectOption(
                     label=dates.formatSimpleDate(session.date, includeTime=False),
                     value=session.date.isoformat(),
+                    default=session.date == self.preSelectedDate,
                 )
             )
 
@@ -478,9 +521,6 @@ class DateSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         selectedDate = self.values[0]
 
-        # Update stored selection
-        self.view.previousSelectedDate = selectedDate
-
         # Update default flags in-place
         for opt in self.options:
             opt.default = opt.value == selectedDate
@@ -489,13 +529,13 @@ class DateSelect(discord.ui.Select):
 
         selectedSession = next(
             filter(
-                lambda s: s.date == dates.simpleDateObj(selectedDate),
+                lambda s: s.date == dates.simpleDateObj(selectedDate).date(),
                 self.film.sessions,
             )
         )
 
         for idx, experience in enumerate(selectedSession.experiences, start=1):
-            name = f"Showtime {idx}"
+            name = f"Experience {idx} {experience.getMostProminentAttributeName()}"
 
             times = [
                 f"— {dates.formatSimpleDate(time.time, discordDateFormat='t')} · {time.screen.title()}"
@@ -504,7 +544,7 @@ class DateSelect(discord.ui.Select):
 
             reply.add_field(
                 name=name,
-                value=f"{' '.join(experience.listExperienceIDS())}\n{text.truncateString('\n'.join(times), 1000)[0]}",
+                value=f"{' '.join(experience.listExperienceDisplays())}\n{text.truncateString('\n'.join(times), 1000)[0]}",
                 inline=False,
             )
 
