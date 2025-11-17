@@ -199,7 +199,7 @@ class Movies(commands.Cog):
 
             movieSelectView.message = selectionResponse
         except Exception as e:
-            raise e
+            # raise e
             reply = EmbedReply(
                 "Movie Showtimes - Error", "movies", True, description=f"Error: {e}"
             )
