@@ -112,7 +112,7 @@ class Film:
         image: discord.File,
         filmURL: str,
         releaseDate: datetime.datetime,
-        duration: float,
+        runtime: int,
         description: str,
         cast: str,
         director: str,
@@ -130,7 +130,7 @@ class Film:
         self.image = image
         self.filmURL = filmURL
         self.releaseDate = releaseDate
-        self.duration = duration
+        self.runtime = runtime
         self.description = description
         self.cast = cast
         self.director = director
@@ -170,6 +170,14 @@ class Film:
         results.sort(key=lambda d: d[1])
 
         return [result[0] for result in results]
+
+    def formatRuntime(self) -> str:
+        try:
+            runtime = round(self.runtime * 60)
+
+            return dates.formatSeconds(runtime)
+        except ValueError:
+            return f"{self.runtime} mins"
 
 
 def fetchShowtimes(chain: str, location: str) -> dict:
@@ -236,7 +244,7 @@ async def parseShowtimes(
             rawReleaseDate = rawFilmData["ReleaseDate"]
             convertedReleaseDate = dates.simpleDateObj(rawReleaseDate)
 
-            rawDuration = float(rawFilmData["RunTime"])
+            rawRuntime = int(rawFilmData["RunTime"])
             rawDescription = rawFilmData["Teaser"]
             rawCast = rawFilmData["Cast"]
             rawDirector = rawFilmData["Director"]
@@ -251,7 +259,7 @@ async def parseShowtimes(
                 image=imageFileObject,
                 filmURL=filmURL,
                 releaseDate=convertedReleaseDate,
-                duration=rawDuration,
+                runtime=rawRuntime,
                 description=rawDescription,
                 cast=rawCast,
                 director=rawDirector,
@@ -359,7 +367,7 @@ class MovieDetailsEmbedReply(EmbedReply):
 
         self.set_thumbnail(url="attachment://movie-poster.jpg")
         self.add_field(name="Age Rating", value=film.ageRating)
-        self.add_field(name="Runtime", value=f"{round(film.duration)} mins")
+        self.add_field(name="Runtime", value=film.formatRuntime())
 
         self.add_field(
             name="Release Date",
@@ -385,7 +393,7 @@ class MovieSelectionView(discord.ui.View):
                 discord.SelectOption(
                     label=text.truncateString(film.name, 100)[0],
                     description=text.truncateString(
-                        f"Next Show: {dates.formatSimpleDate(film.sessions[0].date, includeTime=False)} · Release: {dates.formatSimpleDate(film.releaseDate, includeTime=False)} · Runtime: {round(film.duration)} mins",
+                        f"Next Show: {dates.formatSimpleDate(film.sessions[0].date, includeTime=False)} · Release: {dates.formatSimpleDate(film.releaseDate, includeTime=False)} · Runtime: {film.formatRuntime()}",
                         100,
                     )[0],
                     value=str(film.id),
@@ -489,79 +497,6 @@ class MovieSelect(discord.ui.Select):
         )
 
 
-class MovieSelectInDetails(discord.ui.Select):
-    def __init__(self, films, currentFilm):
-        options = []
-        for film in films:
-            options.append(
-                discord.SelectOption(
-                    label=text.truncateString(film.name, 100)[0],
-                    description=text.truncateString(
-                        f"Runtime: {round(film.duration)} mins", 100
-                    )[0],
-                    value=str(film.id),
-                    default=(film.id == currentFilm.id),
-                )
-            )
-
-        self.films = films
-        super().__init__(placeholder="Select a movie...", options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        self.view.stop()
-
-        filmID = int(self.values[0])
-        newFilm = next(f for f in self.films if f.id == filmID)
-
-        # --- MODIFICATION ---
-        # Pass the preSelectedDate from the *current* view to the new view
-        # so the default selection is maintained when switching films.
-        newView = DateSelectView(
-            film=newFilm,
-            films=self.films,
-            message=self.view.message,
-            preSelectedDate=self.view.preSelectedDate,
-        )
-
-        embed = MovieDetailsEmbedReply(newFilm)
-
-        embed.add_field(
-            name="Available Experiences",
-            value=" ".join(newFilm.allAvailableExperienceDisplays()),
-            inline=False,
-        )
-
-        # --- MODIFICATION ---
-        # Re-run the pre-selection logic just like in MovieSelect.callback
-        # to show showtimes immediately for the new film on the same date.
-        if self.view.preSelectedDate:
-            try:
-                selectedSession = next(
-                    filter(
-                        lambda s: s.date == self.view.preSelectedDate,
-                        newFilm.sessions,
-                    )
-                )
-                for idx, experience in enumerate(selectedSession.experiences, start=1):
-                    name = (
-                        f"Experience {idx} {experience.getMostProminentAttributeName()}"
-                    )
-                    times = [
-                        f"— {dates.formatSimpleDate(time.time, discordDateFormat='t')} · {time.screen.title()}"
-                        for time in experience.times
-                    ]
-                    embed.add_field(
-                        name=name,
-                        value=f"{' '.join(experience.listExperienceDisplays())}\n{text.truncateString('\n'.join(times), 1000)[0]}",
-                        inline=False,
-                    )
-            except StopIteration:
-                pass  # No sessions for this date on the new film
-        # --- END MODIFICATION ---
-
-        await interaction.response.edit_message(embed=embed, view=newView)
-
-
 class DateSelectView(discord.ui.View):
     def __init__(
         self,
@@ -576,16 +511,13 @@ class DateSelectView(discord.ui.View):
         self.message = message
         self.preSelectedDate = preSelectedDate
 
-        # movie picker - CURRNETLY HIDDEN BECAUSE DISCORD FILE UPLOAD LIMITATIONS
-        # self.add_item(MovieSelectInDetails(films, film))
-
         # date picker
         dateOptions = []
         for session in film.sessions:
             dateOptions.append(
                 discord.SelectOption(
                     label=dates.formatSimpleDate(
-                        session.date, includeTime=False, relativity=True
+                        session.date, includeTime=False, relativity=True, weekday=True
                     ),
                     value=session.date.isoformat(),
                     # This default flag is set based on the passed date

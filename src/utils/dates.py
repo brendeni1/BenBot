@@ -42,6 +42,10 @@ def formatSeconds(seconds: int):
     return " ".join(result) if result else "0s"
 
 
+import datetime
+from dateutil import parser
+
+
 def formatSimpleDate(
     timestamp: str | datetime.datetime | datetime.date = None,
     *,
@@ -50,6 +54,7 @@ def formatSimpleDate(
     timeNow: bool = False,
     discordDateFormat: str = None,
     relativity: bool = True,
+    weekday: bool = False,
 ) -> str:
     """
     Format a date, datetime object, or string into a readable string or Discord's rich timestamp format.
@@ -85,8 +90,12 @@ def formatSimpleDate(
         - "F" → long date/time (e.g. Saturday, September 27, 2025 9:41 PM)
         - "R" → relative time (e.g. "in 2 years", "3 days ago")
 
-    relativity : bool, default=False
+    relativity : bool, default=True
         If True, returns Yesterday/Today/Tomorrow for such dates instead of full date. Otherwise full date.
+
+    weekday : bool, default=False
+        If True, includes the abbreviated weekday (e.g., "Mon") in the date part,
+        unless `relativity` is active (Yesterday/Today/Tomorrow).
 
     Returns
     -------
@@ -117,8 +126,6 @@ def formatSimpleDate(
         raise TypeError(f"Unsupported timestamp type: {type(timestamp)}")
 
     # Check if the resolved object has a time component.
-    # datetime.datetime is a subclass of datetime.date, so we check
-    # if it's an instance of the more specific datetime.datetime.
     has_time_component = isinstance(obj, datetime.datetime)
 
     # --- 2. Handle Discord Format (requires a datetime) ---
@@ -142,6 +149,7 @@ def formatSimpleDate(
 
     date_part_str = ""
     time_part_str = ""
+    use_relativity = False  # Flag to track if relativity was used
 
     # --- 4a. Resolve Date Part with Relativity ---
     if relativity:
@@ -154,26 +162,33 @@ def formatSimpleDate(
 
         if delta_days == 0:
             date_part_str = "Today"
+            use_relativity = True
         elif delta_days == -1:
             date_part_str = "Yesterday"
+            use_relativity = True
         elif delta_days == 1:
             date_part_str = "Tomorrow"
-        else:
-            # Fallback for dates not Yesterday/Today/Tomorrow
-            date_part_str = obj.strftime("%b %-d %Y")
-    else:
-        # Standard date formatting
-        date_part_str = obj.strftime("%b %-d %Y")
+            use_relativity = True
 
-    # --- 4b. Resolve Time Part ---
+    # --- 4b. Standard Date Formatting (Applies if relativity not used) ---
+    if not use_relativity:
+        # Determine the format string based on the new `weekday` parameter
+        # %a is abbreviated weekday (e.g., "Wed")
+        # %b %-d %Y is Month Abbrev Day Year (e.g., "Nov 18 2025")
+        if weekday:
+            date_format = "%a %b %-d %Y"
+        else:
+            date_format = "%b %-d %Y"
+
+        date_part_str = obj.strftime(date_format)
+
+    # --- 4c. Resolve Time Part ---
     # Include time only if requested AND available
     if includeTime and has_time_component:
         # Use strftime directives for 12-hour clock, minute, and AM/PM
-        # (%#I on Windows, %-I on Linux/macOS to remove leading zero)
-        # Using %#I as it was in your original.
         time_part_str = obj.strftime("%-I:%M %p")
 
-    # --- 4c. Combine and Return ---
+    # --- 4d. Combine and Return ---
     if time_part_str:
         return f"{date_part_str} {time_part_str}"
     else:
