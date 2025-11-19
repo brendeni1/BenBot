@@ -25,11 +25,11 @@ class AllegianceReply(EmbedReply):
             "Anti-Ben - Pledge of Allegiance",
             "antiben",
             description=f"""
-            I, {user.mention}, solemnly swear to uphold the principles of the Anti-Ben Movement. <:benNerd:1337974775561191495> I pledge to relentlessly protest the actions of Benjamin Robert Garrick <:niggawhat:858531525016682546>, to spread awareness of [his misdeeds](https://anti-ben.brendenian.net/), and to stand in solidarity with all fellow members of this noble cause <:Hotboys:801485557356167168>. I will fight for justice, for camaraderie, and for a Ben-free future! 🚫 <:bussy:801246370396110848>
-            
-            #AntiBenForever
+I, {user.mention}, solemnly swear to uphold the principles of the Anti-Ben Movement. <:benNerd:1337974775561191495> I pledge to relentlessly protest the actions of Benjamin Robert Garrick <:niggawhat:858531525016682546>, to spread awareness of [his misdeeds](https://anti-ben.brendenian.net/), and to stand in solidarity with all fellow members of this noble cause <:Hotboys:801485557356167168>. I will fight for justice, for camaraderie, and for a Ben-free future! 🚫 <:bussy:801246370396110848>
 
-            And, of course... Fuck Oreo too! <:retardedfatstupidobesedumbfuck:855178257631674398> 🔫🔫
+#AntiBenForever
+
+And, of course... Fuck Oreo too! <:retardedfatstupidobesedumbfuck:855178257631674398> 🔫🔫
             """,
         )
 
@@ -77,16 +77,16 @@ class AntiBen(commands.Cog):
         reply = EmbedReply(
             title="Anti-Ben - Movement",
             commandName="antiben",
-            description=f"""
-            {" ⛔ <:benNerd:1337974775561191495> ANTI-BEN MOVEMENT <:benNerd:1337974775561191495> ⛔ ".center(125, "-")}
+            description="""
+⛔ <:benNerd:1337974775561191495> ANTI-BEN MOVEMENT <:benNerd:1337974775561191495> ⛔
 
-            The Anti-Ben Movement is a grassroots initiative <:colehappy:801246369796587569> dedicated to raising awareness about, and protesting against, the individual known as BENJAMIN Robert GARRICK --> <:benchad:801248240698916895>. Fueled by a potent mix of camaraderie <:Hotboys:801485557356167168>, inside jokes <:zamn:1089027418959904809>, and the compelling evidence <:brenda:815455359849988106> found on [our movement's website](https://anti-ben.brendenian.net/), we strive to hold Ben accountable for his... actions. Join us in our noble quest! #AntiBenForever.
+The Anti-Ben Movement is a grassroots initiative <:colehappy:801246369796587569> dedicated to raising awareness about, and protesting against, the individual known as BENJAMIN Robert GARRICK --> <:benchad:801248240698916895>. Fueled by a potent mix of camaraderie <:Hotboys:801485557356167168>, inside jokes <:zamn:1089027418959904809>, and the compelling evidence <:brenda:815455359849988106> found on [our movement's website](https://anti-ben.brendenian.net/), we strive to hold Ben accountable for his... actions. Join us in our noble quest! #AntiBenForever.
 
-            We encourage all members of the {ctx.guild.name} to pledge their stand <:joshrad:801246993682137108> <:joshrad:801246993682137108> against Benjamin Robert Garrick. WE NEED YOU 🫵😘 {ctx.user.mention} for Anti BEN army!!!
-            
-            Use `/antiben pledge` or click the pledge button below to show your solditude <:benpants:1234985201160163450> for the Anti Ben movement and continue the fight.
+We encourage all members of the {ctx.guild.name} to pledge their stand <:joshrad:801246993682137108> <:joshrad:801246993682137108> against Benjamin Robert Garrick. WE NEED YOU 🫵😘 {ctx.user.mention} for Anti BEN army!!!
 
-            Fuck Oreo too! <:retardedfatstupidobesedumbfuck:855178257631674398> 🔫 <:retardedfatstupidobesedumbfuck:855178257631674398> 🔫
+Use `/antiben pledge` or click the pledge button below to show your solditude <:benpants:1234985201160163450> for the Anti Ben movement and continue the fight.
+
+Fuck Oreo too! <:retardedfatstupidobesedumbfuck:855178257631674398> 🔫 <:retardedfatstupidobesedumbfuck:855178257631674398> 🔫
             """,
         )
 
