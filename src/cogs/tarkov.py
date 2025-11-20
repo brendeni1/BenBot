@@ -3,15 +3,12 @@ import sys
 from discord.ext import commands
 
 from src.classes import *
+from src.utils import tarkov
 
-tarkovCommands = discord.SlashCommandGroup(
-    name="tarkov",
-    description="Commands for interacting with data from Escape from Tarkov.",
-    guild_ids=[799341195109203998],
-)
+ITEM_SEARCH_QUERY_RETURN_LIMIT = 10
 
 
-class ItemCommands(commands.Cog):
+class TarkovItemCommands(commands.Cog):
     ISCOG = True
 
     def __init__(self, bot):
@@ -19,35 +16,43 @@ class ItemCommands(commands.Cog):
 
         self.description = "Commands for looking up items in Escape from Tarkov."
 
-    itemCommands = discord.SlashCommandGroup(
+    tarkovCommands = discord.SlashCommandGroup(
+        name="tarkov",
+        description="Commands for interacting with data from Escape from Tarkov.",
+        guild_ids=[799341195109203998],
+    )
+
+    itemCommands = tarkovCommands.create_subgroup(
         name="items",
         description="Commands for looking up items in Escape from Tarkov.",
         guild_ids=[799341195109203998],
-        parent=tarkovCommands,
     )
 
-    # @discord.slash_command(description = "Template for commands.", guild_ids=[799341195109203998])
-    # async def command(self, ctx: discord.ApplicationContext):
-    #     pass
-
-
-class TaskCommands(commands.Cog):
-    ISCOG = True
-
-    def __init__(self, bot):
-        self.bot: discord.Bot = bot
-
-        self.description = "Commands for looking up tasks/quests in Escape from Tarkov."
-
-    taskCommands = discord.SlashCommandGroup(
-        name="quests",
-        description="Commands for looking up tasks/quests in Escape from Tarkov.",
+    @itemCommands.command(
+        description="Search for an item by name or tarkov.dev ID.",
         guild_ids=[799341195109203998],
-        parent=tarkovCommands,
     )
-    # @discord.slash_command(description = "Template for commands.", guild_ids=[799341195109203998])
-    # async def command(self, ctx: discord.ApplicationContext):
-    #     pass
+    async def search(self, ctx: discord.ApplicationContext, term: discord.Option(str, description="An in-game item to search for.", required=True), id: discord.Option(bool, description="Whether the item provided is an ID. (Must be a tarkov.dev ID)", default=False)):  # type: ignore
+        try:
+            await ctx.defer()
+
+            searchKey = "ids" if id else "names"
+
+            query = f'{{ items({searchKey}: ["{term}"], limit: {ITEM_SEARCH_QUERY_RETURN_LIMIT}) {{ id, name }} }}'
+
+            queryResponse = tarkov.fetch(query=query)
+
+            await ctx.followup.send(str(queryResponse), ephemeral=True)
+        except Exception as e:
+            raise e
+            reply = EmbedReply(
+                "Tarkov - Item Search - Error",
+                "tarkov",
+                error=True,
+                description=f"Error: {e}",
+            )
+
+            await reply.send(ctx)
 
 
 def setup(bot):

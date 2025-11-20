@@ -10,10 +10,26 @@ from src.classes import *
 
 
 class Item:
-    pass
+    def __init__(
+        self,
+        id: str,
+    ):
+        pass
 
 
 class ContainedItem:
+    pass
+
+
+class AttributeItem:
+    pass
+
+
+class Task:
+    pass
+
+
+class TaskRewards:
     pass
 
 
@@ -30,6 +46,30 @@ class Trader:
 
 
 class TraderLevel:
+    pass
+
+
+class TraderStanding:
+    pass
+
+
+class SkillLevel:
+    pass
+
+
+class Skill:
+    pass
+
+
+class OfferUnlock:
+    pass
+
+
+class Achievement:
+    pass
+
+
+class CustomizationItem:
     pass
 
 
@@ -83,3 +123,18 @@ class RequirementSkill:
 
 class RequirementTrader:
     pass
+
+
+def fetch(query):
+    headers = {"Content-Type": "application/json"}
+
+    response = requests.post(
+        "https://api.tarkov.dev/graphql", headers=headers, json={"query": query}
+    )
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise Exception(
+            f"Tarkov query failed to run by returning code of {response.status_code}. Query: {query}"
+        )
