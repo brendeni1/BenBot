@@ -9,120 +9,45 @@ from src import constants
 from src.classes import *
 
 
-class Item:
+class ItemPrice:
     def __init__(
         self,
-        id: str,
+        name: str,
+        price: int,
+        priceRUB: int,
     ):
         pass
 
 
-class ContainedItem:
-    pass
-
-
-class AttributeItem:
-    pass
-
-
-class Task:
-    pass
-
-
-class TaskRewards:
-    pass
-
-
-class Task:
-    pass
-
-
-class TaskItem:
-    pass
-
-
-class Trader:
-    pass
-
-
-class TraderLevel:
-    pass
-
-
-class TraderStanding:
-    pass
-
-
-class SkillLevel:
-    pass
-
-
-class Skill:
-    pass
-
-
-class OfferUnlock:
-    pass
-
-
-class Achievement:
-    pass
-
-
-class CustomizationItem:
-    pass
-
-
-class TraderCashOffer:
-    pass
-
-
-class TraderReputationLevel:
-    pass
-
-
 class Vendor:
-    pass
+    def __init__(self, name: str, slug: str):
+        pass
 
 
-class ItemPrice:
-    pass
+class ItemOffer:
+    def __init__(self, vendor: Vendor, price: ItemPrice):  # type: ignore
+        pass
 
 
-class Barter:
-    pass
-
-
-class Craft:
-    pass
-
-
-class HideoutStation:
-    pass
-
-
-class HideoutStationBonus:
-    pass
-
-
-class HideoutStationLevel:
-    pass
-
-
-class RequirementHideoutStationLevel:
-    pass
-
-
-class RequirementItem:
-    pass
-
-
-class RequirementSkill:
-    pass
-
-
-class RequirementTrader:
-    pass
+class Item:
+    def __init__(
+        self,
+        *,
+        id: str,
+        name: str,
+        shortName: str,
+        slug: str,
+        description: str,
+        basePrice: ItemPrice,
+        avg24hPrice: ItemPrice,
+        buys: list[ItemOffer],
+        sells: list[ItemOffer],
+        lastUpdate: datetime.datetime,
+        image: str,
+        wikiLink: str,
+        apiLink: str,
+    ):
+        pass
 
 
 def fetch(query):
@@ -138,3 +63,7 @@ def fetch(query):
         raise Exception(
             f"Tarkov query failed to run by returning code of {response.status_code}. Query: {query}"
         )
+
+
+def parseItem():
+    pass

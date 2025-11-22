@@ -18,6 +18,7 @@ ALBUM_APISEARCH_RESULTS_LIMIT = 5
 
 SLEEP_BETWEEN_API_ATTEMPTS = 2
 
+
 async def paginateRatingList(
     results: list[tuple],
     bot: discord.Bot,
@@ -49,9 +50,7 @@ async def paginateRatingList(
             ratingChannel = bot.get_channel(RATING_CHANNEL)
 
             try:
-                oldMessageReference = await ratingChannel.fetch_message(
-                    oldMessageID
-                )
+                oldMessageReference = await ratingChannel.fetch_message(oldMessageID)
 
                 descriptor += f"\nView: {oldMessageReference.jump_url}"
             except discord.errors.NotFound:
@@ -149,7 +148,9 @@ class AlbumRatings(commands.Cog):
 
                 view = music.ChooseAlbumView(choiceObjects)
 
-                msg: discord.WebhookMessage = await ctx.respond(embed=reply, view=view, ephemeral=True)
+                msg: discord.WebhookMessage = await ctx.respond(
+                    embed=reply, view=view, ephemeral=True
+                )
                 view.message = msg
 
                 await view.wait()
@@ -195,7 +196,7 @@ class AlbumRatings(commands.Cog):
                     embed=finishedRatingEmbed,
                     view=music.FinishedRatingPersistentMessageButtonsView(
                         parsedAlbumDetails.link,
-                    )
+                    ),
                 )
 
                 packedAlbumRating = parsedAlbumDetails.packAlbumRating(
@@ -230,7 +231,7 @@ class AlbumRatings(commands.Cog):
                 break
             except requests.exceptions.ConnectionError:
                 attempt += 1
-                
+
                 print(f"Spotify Connection attempt {attempt} Failed")
 
                 await asyncio.sleep(SLEEP_BETWEEN_API_ATTEMPTS)
@@ -327,14 +328,14 @@ class AlbumRatings(commands.Cog):
                         embed=albumRatingEmbed,
                         view=music.FinishedRatingPersistentMessageButtonsView(
                             unpackedRating.link,
-                        )
+                        ),
                     )
                 elif oldMessageReference and edit_original_rating_message:
                     ratingMessageReference = await oldMessageReference.edit(
                         embed=albumRatingEmbed,
                         view=music.FinishedRatingPersistentMessageButtonsView(
                             unpackedRating.link,
-                        )
+                        ),
                     )
                 else:
                     raise Exception(
@@ -405,7 +406,7 @@ class AlbumRatings(commands.Cog):
                 id,
             ),
         )
-    
+
     list_ratings = albumRatings.create_subgroup(
         "list",
         "Use these commands to list ratings based on metrics.",
@@ -463,7 +464,7 @@ class AlbumRatings(commands.Cog):
                 ephemeral=ephemeral,
                 view=music.FinishedRatingPersistentMessageButtonsView(
                     unpackedRatings[0].link,
-                )
+                ),
             )
         except Exception as e:
             reply = EmbedReply(
@@ -475,7 +476,6 @@ class AlbumRatings(commands.Cog):
 
             await reply.send(ctx, ephemeral=True)
 
-
     @list_ratings.command(
         description="List album ratings (by Search Term [artist or album_name]).",
         guild_ids=[799341195109203998],
@@ -484,28 +484,45 @@ class AlbumRatings(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
         query: discord.Option(
-            str,
-            description="The name of the album or artist to search ratings for."
-        ), # type: ignore
+            str, description="The name of the album or artist to search ratings for."
+        ),  # type: ignore
+        member: discord.Option(
+            discord.Member,
+            description="Optional: Filter the results to ratings by a specific member.",
+            required=False,  # <-- Now Optional
+        ) = None,  # <-- Set default value to None # type: ignore
     ):
         try:
             database = LocalDatabase()
 
-            results = database.get(
-                "SELECT * FROM albumRatings WHERE ratingAlbum LIKE ? OR ratingArtist LIKE ? ORDER BY createdAt DESC",
-                ("%" + query + "%", "%" + query + "%"),
-            )
+            # --- Database Query Logic ---
+            sql = "SELECT * FROM albumRatings WHERE (ratingAlbum LIKE ? OR ratingArtist LIKE ?) "
+            params = ("%" + query + "%", "%" + query + "%")
+
+            # Add member filter if member is provided
+            if member:
+                sql += "AND createdBy = ? "
+                params += (member.id,)
+
+            sql += "ORDER BY createdAt DESC"
+
+            results = database.get(sql, params)
+            # ----------------------------
 
             if not results:
+                member_filter_text = f" by {member.display_name}" if member else ""
                 raise Exception(
-                    f"No ratings found for query '{query}'.\n\nTry again with less keywords for a broader search."
+                    f"No ratings found for query '{query}'{member_filter_text}.\n\nTry again with less keywords for a broader search."
                 )
+
+            # Update the title/description to reflect the optional member filter
+            member_desc = f" by {member.mention}" if member else ""
 
             pageList = await paginateRatingList(
                 results,
                 self.bot,
                 "Album Ratings - List By Search",
-                f"List of ratings for query '{query}'. ({len(results)} Total)",
+                f"List of ratings for query '{query}'{member_desc}. ({len(results)} Total)",
                 showUserInResults=True,
             )
 
@@ -535,27 +552,47 @@ class AlbumRatings(commands.Cog):
             description="Provide the guild member to inquiry ratings for.",
             required=True,
         ),  # type: ignore
+        album_query: discord.Option(
+            str,
+            description="Optional: Filter the member's ratings by album or artist keyword.",
+            required=False,  # <-- Now Optional
+        ) = None,  # <-- Set default value to None # type: ignore
     ):
         member: discord.Member = member
 
         try:
             database = LocalDatabase()
 
-            results = database.get(
-                "SELECT * FROM albumRatings WHERE createdBy = ? ORDER BY createdAt DESC",
-                (member.id,),
-            )
+            # --- Database Query Logic ---
+            sql = "SELECT * FROM albumRatings WHERE createdBy = ? "
+            params = (member.id,)
+
+            # Add album/artist filter if album_query is provided
+            if album_query:
+                sql += "AND (ratingAlbum LIKE ? OR ratingArtist LIKE ?) "
+                params += ("%" + album_query + "%", "%" + album_query + "%")
+
+            sql += "ORDER BY createdAt DESC"
+
+            results = database.get(sql, params)
+            # ----------------------------
 
             if not results:
-                raise Exception(
-                    f"The user {member.mention} does not have any ratings yet!\n\nGet started with /albumratings create."
+                album_filter_text = (
+                    f" containing '{album_query}'" if album_query else ""
                 )
+                raise Exception(
+                    f"The user {member.mention} does not have any ratings{album_filter_text} yet!\n\nGet started with /albumratings create."
+                )
+
+            # Update the title/description to reflect the optional album filter
+            album_desc = f" filtered by '{album_query}'" if album_query else ""
 
             pageList = await paginateRatingList(
                 results,
                 self.bot,
                 "Album Ratings - List By Member",
-                f"List of ratings for {member.mention}. ({len(results)} Total)",
+                f"List of ratings for {member.mention}{album_desc}. ({len(results)} Total)",
             )
 
             pagignator = pages.Paginator(
@@ -685,7 +722,7 @@ class AlbumRatings(commands.Cog):
                         embed=finishedRatingEmbed,
                         view=music.FinishedRatingPersistentMessageButtonsView(
                             unpackedRating.link,
-                        )
+                        ),
                     )
                 else:
                     if oldMessageReference:
@@ -695,7 +732,7 @@ class AlbumRatings(commands.Cog):
                         embed=finishedRatingEmbed,
                         view=music.FinishedRatingPersistentMessageButtonsView(
                             unpackedRating.link,
-                        )
+                        ),
                     )
 
                 packedAlbumRating = unpackedRating.packAlbumRating(
@@ -735,7 +772,7 @@ class AlbumRatings(commands.Cog):
                     embed=finishedRatingEmbed,
                     view=music.FinishedRatingPersistentMessageButtonsView(
                         unpackedRating.link,
-                    )
+                    ),
                 )
 
                 packedAlbumRating = unpackedRating.packAlbumRating(originalMessage)
@@ -772,7 +809,9 @@ class AlbumRatings(commands.Cog):
         database = LocalDatabase()
 
         # Fetch the target rating from DB
-        targetRating = database.get("SELECT * FROM albumRatings WHERE ratingID = ?", (ratingID,))
+        targetRating = database.get(
+            "SELECT * FROM albumRatings WHERE ratingID = ?", (ratingID,)
+        )
         if not targetRating:
             raise Exception("Rating not found in database.")
 
@@ -835,12 +874,16 @@ class AlbumRatings(commands.Cog):
             oldMsg = await ratingChannel.fetch_message(oldMessageID)
             ratingMessage = await oldMsg.edit(
                 embed=finishedEmbed,
-                view=music.FinishedRatingPersistentMessageButtonsView(unpackedRating.link)
+                view=music.FinishedRatingPersistentMessageButtonsView(
+                    unpackedRating.link
+                ),
             )
         except discord.errors.NotFound:
             ratingMessage = await ratingChannel.send(
                 embed=finishedEmbed,
-                view=music.FinishedRatingPersistentMessageButtonsView(unpackedRating.link),
+                view=music.FinishedRatingPersistentMessageButtonsView(
+                    unpackedRating.link
+                ),
             )
 
         # Update the database
@@ -972,7 +1015,7 @@ class AlbumRatings(commands.Cog):
                         embed=finishedRatingEmbed,
                         view=music.FinishedRatingPersistentMessageButtonsView(
                             unpackedRating.link,
-                        )
+                        ),
                     )
                 else:
                     if oldMessageReference:
@@ -982,7 +1025,7 @@ class AlbumRatings(commands.Cog):
                         embed=finishedRatingEmbed,
                         view=music.FinishedRatingPersistentMessageButtonsView(
                             unpackedRating.link,
-                        )
+                        ),
                     )
             else:
                 finishedSentRating = await finishedRatingEmbed.send(ctx, ephemeral=True)
@@ -1186,11 +1229,11 @@ class AlbumRatings(commands.Cog):
                     await asyncio.sleep(sleep_delay)
                 except discord.NotFound:
                     pass
-            
+
             reply = EmbedReply(
                 "Album Ratings - Update Views",
                 "albumratings",
-                description="All ratings updated!"
+                description="All ratings updated!",
             )
 
             await reply.send(ctx)
@@ -1199,10 +1242,11 @@ class AlbumRatings(commands.Cog):
                 "Album Ratings - Error",
                 "albumratings",
                 True,
-                description="You cannot use this command!"
+                description="You cannot use this command!",
             )
 
             await reply.send(ctx)
+
 
 def setup(bot):
     currentFile = sys.modules[__name__]
