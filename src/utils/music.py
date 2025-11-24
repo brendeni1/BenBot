@@ -22,6 +22,7 @@ SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 # Timeouts in mins.
 TIMEOUT_TO_PICK_ALBUM = 1 * (60)
 TIMEOUT_FOR_RATING_SELECT = 300 * (60)
+TIMEOUT_FOR_DUPE_RATING_CONFIRMATION = 5 * (60)
 
 FAVOURITE_INDEX_OPTIONS = sorted(
     [
@@ -109,16 +110,16 @@ class EditRatingButton(discord.ui.Button):
 
             await interaction.response.send_message(embed=reply)
             return
-        
+
         reply = EmbedReply(
-            "Album Ratings - Edit Rating",
-            "albumratings",
-            description="Editor opened."
+            "Album Ratings - Edit Rating", "albumratings", description="Editor opened."
         )
 
-        replyMessage = await interaction.response.send_message(embed=reply, ephemeral=True)
+        replyMessage = await interaction.response.send_message(
+            embed=reply, ephemeral=True
+        )
         await replyMessage.delete_original_response()
-        
+
         await cog._albumrating_edit_core(
             user=interaction.user,
             ratingID=ratingID,
@@ -126,6 +127,7 @@ class EditRatingButton(discord.ui.Button):
             guild=interaction.guild,
             bot=interaction.client,
         )
+
 
 class DeleteRatingButton(discord.ui.Button):
     def __init__(self, **kwargs):
@@ -154,7 +156,9 @@ class DeleteRatingButton(discord.ui.Button):
             return
 
         database = LocalDatabase()
-        result = database.get("SELECT * FROM albumRatings WHERE ratingID = ?", (ratingID,))
+        result = database.get(
+            "SELECT * FROM albumRatings WHERE ratingID = ?", (ratingID,)
+        )
 
         if not result:
             reply = EmbedReply(
@@ -213,14 +217,14 @@ class DeleteRatingButton(discord.ui.Button):
                 await deleteResponse.edit_original_response(embed=reply, view=None)
 
                 return
-            
+
             if not confirmationReplyView.confirmDelete:
                 await deleteResponse.delete_original_response()
 
                 return
 
             await interaction.message.delete()
-            
+
             database.setOne("DELETE FROM albumRatings WHERE ratingID = ?", (ratingID,))
 
             reply = EmbedReply(
@@ -323,6 +327,36 @@ class CancelButton(discord.ui.Button):
         await ctx.response.edit_message(
             embed=cancelEmbed, view=CancelConfirmView(self.view, ctx.message.embeds)
         )
+
+
+class DuplicateRatingConfirmationView(discord.ui.View):
+    def __init__(self):
+        self.userAcknowledged = False
+        self.paginator = None
+
+        super().__init__(timeout=TIMEOUT_FOR_DUPE_RATING_CONFIRMATION)
+
+    @discord.ui.button(label="Cancel Rating", style=discord.ButtonStyle.red, emoji="⛔")
+    async def cancelCallback(self, button, interaction):
+        self.stop()
+
+        if self.paginator:
+            self.paginator.stop()
+
+        await interaction.response.defer()
+
+    @discord.ui.button(
+        label="Continue Rating", style=discord.ButtonStyle.green, emoji="➡️"
+    )
+    async def continueCallback(self, button, interaction):
+        self.userAcknowledged = True
+
+        self.stop()
+
+        if self.paginator:
+            self.paginator.stop()
+
+        await interaction.response.defer()
 
 
 class SaveRatingButton(discord.ui.Button):

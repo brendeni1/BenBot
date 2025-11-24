@@ -18,6 +18,8 @@ ALBUM_APISEARCH_RESULTS_LIMIT = 5
 
 SLEEP_BETWEEN_API_ATTEMPTS = 2
 
+DUPLICATE_RATING_TIMEOUT_DELETEAFTER = 30
+
 
 async def paginateRatingList(
     results: list[tuple],
@@ -154,11 +156,77 @@ class AlbumRatings(commands.Cog):
                 view.message = msg
 
                 await view.wait()
+                await msg.delete()
 
-                if view.choice == None:
+                albumChoiceID = view.choice
+
+                matchingDuplicateRatings = LocalDatabase().get(
+                    "SELECT * FROM albumRatings WHERE spotifyAlbumID = ? AND createdBy = ?",
+                    (albumChoiceID, ctx.user.id),
+                )
+
+                if matchingDuplicateRatings:
+                    confirmView = music.DuplicateRatingConfirmationView()
+
+                    paginatedResults = await paginateRatingList(
+                        matchingDuplicateRatings,
+                        bot=self.bot,
+                        title="Album Rating - Duplicates Found",
+                        description="You have already rated this album before! Are you sure you want to continue?",
+                    )
+
+                    paginator: pages.Paginator = pages.Paginator(
+                        pages=paginatedResults,
+                        custom_view=confirmView,
+                        timeout=confirmView.timeout,
+                    )
+
+                    confirmView.paginator = paginator
+
+                    duplicateMessage = await paginator.respond(ctx.interaction)
+
+                    timedOut = await paginator.wait()
+
+                    paginator.stop()
+
+                    if timedOut:
+                        timedOutReply = EmbedReply(
+                            "Album Rating - Duplicates Found - Timed Out",
+                            "albumratings",
+                            error=True,
+                            description=f"You took too long to confirm whether you wanted to continue with duplicate ratings! Try again.\n\nThis message will delete in {DUPLICATE_RATING_TIMEOUT_DELETEAFTER} seconds.",
+                        )
+
+                        try:
+                            paginator.disable_on_timeout = False
+
+                            await duplicateMessage.edit(
+                                embed=timedOutReply,
+                                view=None,
+                                delete_after=DUPLICATE_RATING_TIMEOUT_DELETEAFTER,
+                            )
+
+                            return
+                        except discord.NotFound:
+                            return
+
+                    if not paginator.custom_view.userAcknowledged:
+                        try:
+                            await duplicateMessage.delete()
+
+                            return
+                        except discord.NotFound:
+                            return
+
+                    try:
+                        await duplicateMessage.delete()
+                    except discord.NotFound:
+                        pass
+
+                if albumChoiceID == None:
                     return
 
-                albumDetailsFromID = music.fetchAlbumDetailsByID(view.choice)
+                albumDetailsFromID = music.fetchAlbumDetailsByID(albumChoiceID)
 
                 parsedAlbumDetails: music.Album = music.parseAlbumDetails(
                     albumDetailsFromID, ctx.user, song_fetch_limit
@@ -170,8 +238,6 @@ class AlbumRatings(commands.Cog):
 
                 wholeAlbumEmbed = music.AlbumRatingEmbedReply(parsedAlbumDetails)
                 songRatingEmbed = music.TrackRatingEmbedReply(firstTrack)
-
-                await msg.delete()
 
                 originalResponse: discord.Message = await ctx.channel.send(
                     embeds=[wholeAlbumEmbed, songRatingEmbed], view=view
