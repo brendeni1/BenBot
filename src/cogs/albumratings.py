@@ -166,7 +166,9 @@ class AlbumRatings(commands.Cog):
                 )
 
                 if matchingDuplicateRatings:
-                    confirmView = music.DuplicateRatingConfirmationView()
+                    confirmView = music.DuplicateRatingConfirmationView(
+                        originalUser=ctx.user
+                    )
 
                     paginatedResults = await paginateRatingList(
                         matchingDuplicateRatings,
@@ -179,6 +181,7 @@ class AlbumRatings(commands.Cog):
                         pages=paginatedResults,
                         custom_view=confirmView,
                         timeout=confirmView.timeout,
+                        author_check=False,
                     )
 
                     confirmView.paginator = paginator

@@ -330,14 +330,34 @@ class CancelButton(discord.ui.Button):
 
 
 class DuplicateRatingConfirmationView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, originalUser: discord.User):
         self.userAcknowledged = False
+        self.originalUser = originalUser
         self.paginator = None
 
         super().__init__(timeout=TIMEOUT_FOR_DUPE_RATING_CONFIRMATION)
 
+    # 1. Helper function to check permissions and send your custom error
+    async def check_permissions(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id == self.originalUser.id:
+            return True
+
+        # If not the owner, send the error message
+        reply = EmbedReply(
+            "Album Ratings - Duplicates Found",
+            "albumratings",
+            True,
+            description="You cannot decide that for someone else!",
+        )
+        await interaction.response.send_message(embed=reply, ephemeral=True)
+        return False
+
     @discord.ui.button(label="Cancel Rating", style=discord.ButtonStyle.red, emoji="⛔")
     async def cancelCallback(self, button, interaction):
+        # 2. Call the check at the start of the button callback
+        if not await self.check_permissions(interaction):
+            return
+
         self.stop()
 
         if self.paginator:
@@ -349,6 +369,10 @@ class DuplicateRatingConfirmationView(discord.ui.View):
         label="Continue Rating", style=discord.ButtonStyle.green, emoji="➡️"
     )
     async def continueCallback(self, button, interaction):
+        # 3. Call the check at the start of the button callback
+        if not await self.check_permissions(interaction):
+            return
+
         self.userAcknowledged = True
 
         self.stop()
