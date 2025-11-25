@@ -156,7 +156,11 @@ class AlbumRatings(commands.Cog):
                 view.message = msg
 
                 await view.wait()
-                await msg.delete()
+
+                try:
+                    await msg.delete()
+                except discord.NotFound:
+                    pass
 
                 albumChoiceID = view.choice
 
