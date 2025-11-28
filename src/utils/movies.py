@@ -1,6 +1,7 @@
 import discord
 import requests
 import datetime
+import xmltodict
 
 from src.utils import dates
 from src.utils import text
@@ -10,6 +11,9 @@ from src import constants
 from src.classes import *
 
 SELECTION_TIMEOUT = 600
+TRAILER_SEARCH_CUTOFF = 40.0
+TRAILER_SEARCH_INIT_AMOUNT = 500
+TRAILER_SEARCH_KEYWORDS = ""
 
 
 class ExperienceAttribute:
@@ -122,6 +126,7 @@ class Film:
         province: str,
         location: dict,
         sessions: list[Session] | None = None,
+        trailerLink: str | None = None,
     ):
         self.id = id
         self.name = name
@@ -140,6 +145,7 @@ class Film:
         self.province = province
         self.location = location
         self.sessions = sessions if sessions is not None else []
+        self.trailerLink = trailerLink
 
     def addSession(self, session: Session) -> None:
         session.film = self
@@ -208,6 +214,51 @@ def fetchShowtimes(chain: str, location: str) -> dict:
         return parsedResponse
     else:
         raise Exception("Invalid chain passed to fetchShowtimes")
+
+
+def fetchTrailersForAll(films: list[Film]) -> None:
+    # Only need to fetch once
+    url = "https://www.landmarkcinemas.com/umbraco/api/ListingApi/GetVideosOverview"
+
+    params = {"itemsPerPage": TRAILER_SEARCH_INIT_AMOUNT}
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-CA,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Referer": "https://www.landmarkcinemas.com/showtimes/windsor",
+        "Cookie": "LMC_TheatreId=7802; LMC_TheatreURL=%2Fshowtimes%2Fwindsor; LMC_TheatreName=%2Fnow-playing%2Fwindsor",
+    }
+
+    response = requests.get(url=url, params=params, headers=headers)
+    response.raise_for_status()
+
+    parsed = xmltodict.parse(response.text)
+
+    items = parsed["TrailersListing"]["Items"]["TrailersListingItem"]
+    if not items:
+        return
+
+    # Build a list of titles + URLs for fuzzy search
+    trailer_titles = [item["Title"] for item in items]
+    trailer_urls = [f"https://www.landmarkcinemas.com{item['Url']}" for item in items]
+
+    # One fuzzy search per film, no API hits
+    for film in films:
+        if film.chain == "Landmark":
+            candidates = text.fuzzySearch(
+                film.name + TRAILER_SEARCH_KEYWORDS,
+                trailer_titles,
+                scoreCutoff=TRAILER_SEARCH_CUTOFF,
+            )
+
+            if not candidates:
+                film.trailerLinks = None
+                continue
+
+            best_index = candidates[0][2]
+            film.trailerLink = trailer_urls[best_index]
 
 
 async def parseShowtimes(
@@ -352,6 +403,8 @@ async def parseShowtimes(
         raise Exception(
             f"No films were found on or after {dates.formatSimpleDate(startDate if startDate else "Today", discordDateFormat="D")}."
         )
+
+    fetchTrailersForAll(parsed)
 
     return parsed
 
@@ -531,6 +584,9 @@ class DateSelectView(discord.ui.View):
 
         selectItem = DateSelect(dateOptions, film, message)
         self.add_item(selectItem)
+
+        if film.trailerLink:
+            self.add_item(OpenLink("View Trailer", link=film.trailerLink))
 
         # The initDate() call is no longer needed here, as the logic
         # is now handled in MovieSelect.callback before this view is sent.
