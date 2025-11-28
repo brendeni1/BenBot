@@ -12,7 +12,7 @@ from src.classes import *
 
 SELECTION_TIMEOUT = 600
 TRAILER_SEARCH_CUTOFF = 40.0
-TRAILER_SEARCH_INIT_AMOUNT = 500
+TRAILER_SEARCH_INIT_AMOUNT = 250
 TRAILER_SEARCH_KEYWORDS = ""
 
 
@@ -220,7 +220,11 @@ def fetchTrailersForAll(films: list[Film]) -> None:
     # Only need to fetch once
     url = "https://www.landmarkcinemas.com/umbraco/api/ListingApi/GetVideosOverview"
 
-    params = {"itemsPerPage": TRAILER_SEARCH_INIT_AMOUNT}
+    params = {
+        "itemsPerPage": TRAILER_SEARCH_INIT_AMOUNT,
+        "currentPage": "1",
+        "filterBy": "recent",
+    }
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
@@ -248,7 +252,7 @@ def fetchTrailersForAll(films: list[Film]) -> None:
     for film in films:
         if film.chain == "Landmark":
             candidates = text.fuzzySearch(
-                film.name + TRAILER_SEARCH_KEYWORDS,
+                film.friendlyName + TRAILER_SEARCH_KEYWORDS,
                 trailer_titles,
                 scoreCutoff=TRAILER_SEARCH_CUTOFF,
             )
@@ -278,6 +282,10 @@ async def parseShowtimes(
         ):
             rawFilmID = rawFilmData["FilmId"]
             rawName = rawFilmData["Title"]
+
+            if "Mystery Movie" in rawName:
+                continue
+
             friendlyName = rawFilmData["FriendlyName"]
 
             rawRating = rawFilmData["Cert"]
@@ -503,9 +511,11 @@ class MovieSelect(discord.ui.Select):
 
         reply = MovieDetailsEmbedReply(selectedFilm)
 
+        allAvailableExperienceDisplays = selectedFilm.allAvailableExperienceDisplays()
+
         reply.add_field(
             name="Available Experiences",
-            value=" ".join(selectedFilm.allAvailableExperienceDisplays()),
+            value=" ".join(allAvailableExperienceDisplays),
             inline=False,
         )
 
@@ -585,8 +595,16 @@ class DateSelectView(discord.ui.View):
         selectItem = DateSelect(dateOptions, film, message)
         self.add_item(selectItem)
 
-        if film.trailerLink:
-            self.add_item(OpenLink("View Trailer", link=film.trailerLink))
+        if film.chain == "Landmark":
+            if film.trailerLink:
+                self.add_item(OpenLink("View Movie Trailer", link=film.trailerLink))
+            else:
+                self.add_item(
+                    OpenLink(
+                        "View All Trailers",
+                        link="https://www.landmarkcinemas.com/movie-trailers",
+                    )
+                )
 
         # The initDate() call is no longer needed here, as the logic
         # is now handled in MovieSelect.callback before this view is sent.
