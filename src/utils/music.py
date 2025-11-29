@@ -1060,7 +1060,9 @@ class Album:
             return None
         elif self.releaseDate:
             if verbose:
-                return dates.formatSimpleDate(self.releaseDate, includeTime=False)
+                return dates.formatSimpleDate(
+                    self.releaseDate, includeTime=False, relativity=False
+                )
             else:
                 return self.releaseDate.year
         else:
