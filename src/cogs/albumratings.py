@@ -31,6 +31,18 @@ async def paginateRatingList(
 ) -> list[pages.Page]:
     pageList = []
 
+    # 1. Get Channel object and Guild ID ONCE
+    ratingChannel = bot.get_channel(RATING_CHANNEL)
+    guild_id = None
+    if ratingChannel and hasattr(ratingChannel, "guild") and ratingChannel.guild:
+        guild_id = ratingChannel.guild.id
+
+    # 2. Add a check to ensure you can form the URL
+    if not guild_id:
+        # You can't form the jump URL without the Guild ID. Handle this error
+        # or fall back to a non-URL display.
+        print("Could not retrieve Guild ID for URL construction.")
+
     for chunk in range(0, len(results), LIST_RATINGS_PER_PAGE):
         page = EmbedReply(title, "albumratings", description=description)
 
@@ -49,14 +61,11 @@ async def paginateRatingList(
                 descriptor += f"\nRating By: <@{result[1]}>"
 
             oldMessageID = result[8]
-            ratingChannel = bot.get_channel(RATING_CHANNEL)
 
-            try:
-                oldMessageReference = await ratingChannel.fetch_message(oldMessageID)
-
-                descriptor += f"\nView: {oldMessageReference.jump_url}"
-            except discord.errors.NotFound:
-                pass
+            # 3. DIRECTLY CONSTRUCT THE JUMP URL
+            if guild_id and oldMessageID:
+                jump_url = f"https://discord.com/channels/{guild_id}/{RATING_CHANNEL}/{oldMessageID}"
+                descriptor += f"\nView: {jump_url}"
 
             page.add_field(name=formattedRatingName, value=descriptor, inline=False)
 
@@ -631,13 +640,15 @@ class AlbumRatings(commands.Cog):
             required=False,  # <-- Now Optional
         ) = None,  # <-- Set default value to None # type: ignore
     ):
+        await ctx.defer()
+
         member: discord.Member = member
 
         try:
             database = LocalDatabase()
 
             # --- Database Query Logic ---
-            sql = "SELECT * FROM albumRatings WHERE createdBy = ? "
+            sql = "SELECT * FROM albumRatings WHERE createdBy = ?"
             params = (member.id,)
 
             # Add album/artist filter if album_query is provided
