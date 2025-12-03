@@ -1,5 +1,4 @@
 import discord
-import sys
 from discord.ext import commands
 
 from src.classes import *
