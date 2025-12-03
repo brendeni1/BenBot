@@ -34,7 +34,9 @@ class Users(commands.Cog):
             target: discord.Member = ctx.user if not target else target
 
             targetPFP = (
-                target.guild_avatar if ctx.guild and use_guild_avatar else target.avatar
+                target.display_avatar
+                if ctx.guild and use_guild_avatar
+                else target.avatar
             )
 
             if not targetPFP:
