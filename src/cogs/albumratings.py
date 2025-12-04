@@ -28,6 +28,7 @@ async def paginateRatingList(
     description: str,
     *,
     showUserInResults: bool = False,
+    showRatingInResults: bool = True,
 ) -> list[pages.Page]:
     pageList = []
 
@@ -51,11 +52,18 @@ async def paginateRatingList(
                 result[2], discordDateFormat="d"
             )
 
+            albumTitleTruncated = text.truncateString(result[5], 70)[0]
+
             formattedRatingName = text.truncateString(
-                f"{result[5]} · {result[4]} · {formattedCreatedAt}", 256
+                f"{albumTitleTruncated} · {result[4]} · {formattedCreatedAt}", 256
             )[0]
 
-            descriptor = f"Rating ID: {result[0]}"
+            descriptor = ""
+
+            if showRatingInResults:
+                descriptor += f"\nRating: {result[7]}"
+
+            descriptor += f"\nRating ID: {result[0]}"
 
             if showUserInResults:
                 descriptor += f"\nRating By: <@{result[1]}>"
@@ -632,7 +640,7 @@ class AlbumRatings(commands.Cog):
         member: discord.Option(
             discord.Member,
             description="Provide the guild member to inquiry ratings for.",
-            required=True,
+            required=False,
         ),  # type: ignore
         album_query: discord.Option(
             str,
@@ -642,7 +650,7 @@ class AlbumRatings(commands.Cog):
     ):
         await ctx.defer()
 
-        member: discord.Member = member
+        member: discord.Member = member if member else ctx.user
 
         try:
             database = LocalDatabase()
@@ -676,7 +684,7 @@ class AlbumRatings(commands.Cog):
                 results,
                 self.bot,
                 "Album Ratings - List By Member",
-                f"List of ratings for {member.mention}{album_desc}. ({len(results)} Total)",
+                f"List of ratings for {member.mention}{album_desc} ({len(results)} Total)",
             )
 
             pagignator = pages.Paginator(
@@ -687,6 +695,65 @@ class AlbumRatings(commands.Cog):
         except Exception as e:
             reply = EmbedReply(
                 "Album Ratings - List By Member",
+                "albumratings",
+                True,
+                description=str(e),
+            )
+
+            await reply.send(ctx, ephemeral=True)
+
+    @list_ratings.command(
+        description="List the top album ratings for a member",
+        guild_ids=[799341195109203998],
+    )
+    async def top(
+        self,
+        ctx: discord.ApplicationContext,
+        member: discord.Option(
+            discord.Member,
+            description="Provide the guild member to inquiry ratings for.",
+            required=False,
+        ),  # type: ignore
+        ascending: discord.Option(
+            bool,
+            description="Filter in reverse order? (Worst album first.)",
+            default=False,
+        ),  # type: ignore
+    ):
+        await ctx.defer()
+
+        member: discord.Member = member if member else ctx.user
+
+        try:
+            database = LocalDatabase()
+
+            sql = f"SELECT * FROM albumRatings WHERE createdBy = ?"
+            params = (member.id,)
+
+            results = database.get(sql, params)
+
+            if not results:
+                raise Exception(
+                    f"The user {member.mention} does not have any ratings yet!\n\nGet started with `/albumratings create`"
+                )
+
+            results.sort(key=music.sortByRating, reverse=not ascending)
+
+            pageList = await paginateRatingList(
+                results,
+                self.bot,
+                "Album Ratings - List Top",
+                f"List of top ratings for {member.mention}, sorted in {"ascending" if ascending else "descending"} order. ({len(results)} Total)",
+            )
+
+            pagignator = pages.Paginator(
+                pages=pageList,
+            )
+
+            await pagignator.respond(ctx.interaction)
+        except Exception as e:
+            reply = EmbedReply(
+                "Album Ratings - List Top",
                 "albumratings",
                 True,
                 description=str(e),

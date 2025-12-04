@@ -1471,3 +1471,11 @@ def unpackAlbumRating(bot: discord.Bot, packedAlbumRating: bytes) -> Album:
     unserializedAlbumRating.createdBy = bot.get_user(unserializedAlbumRating.createdBy)
 
     return unserializedAlbumRating
+
+
+def sortByRating(result: tuple) -> float:
+    rawRating: str = result[7].split("/")
+
+    score, outOf = float(rawRating[0]), float(rawRating[1])
+
+    return score / outOf
