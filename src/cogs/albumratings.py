@@ -10,7 +10,7 @@ from src.utils import dates
 
 RATING_CHANNEL = 946507420916678688
 
-LIST_RATINGS_PER_PAGE = 10
+LIST_RATINGS_PER_PAGE = 8
 
 DELETE_SAVED_REPLY_AFTER = 15
 
@@ -18,11 +18,13 @@ ALBUM_APISEARCH_RESULTS_LIMIT = 5
 
 SLEEP_BETWEEN_API_ATTEMPTS = 2
 
+SINGLE_ALBUM_TRACK_CRITERIA = 1
+
 DUPLICATE_RATING_TIMEOUT_DELETEAFTER = 30
 
 
 async def paginateRatingList(
-    results: list[tuple],
+    results,
     bot: discord.Bot,
     title: str,
     description: str,
@@ -47,28 +49,29 @@ async def paginateRatingList(
     for chunk in range(0, len(results), LIST_RATINGS_PER_PAGE):
         page = EmbedReply(title, "albumratings", description=description)
 
-        for result in results[chunk : chunk + LIST_RATINGS_PER_PAGE]:
+        for rating in results[chunk : chunk + LIST_RATINGS_PER_PAGE]:
             formattedCreatedAt = dates.formatSimpleDate(
-                result[2], discordDateFormat="d"
+                rating.createdAt, discordDateFormat="d"
             )
 
-            albumTitleTruncated = text.truncateString(result[5], 70)[0]
+            albumTitleTruncated = text.truncateString(rating.ratingAlbum, 70)[0]
 
             formattedRatingName = text.truncateString(
-                f"{albumTitleTruncated} · {result[4]} · {formattedCreatedAt}", 256
+                f"{albumTitleTruncated} · {rating.ratingArtist} · {formattedCreatedAt}",
+                256,
             )[0]
 
             descriptor = ""
 
             if showRatingInResults:
-                descriptor += f"\nRating: {result[7]}"
+                descriptor += f"\nRating: {rating.formattedRating}"
 
-            descriptor += f"\nRating ID: {result[0]}"
+            descriptor += f"\nRating ID: {rating.ratingID}"
 
             if showUserInResults:
-                descriptor += f"\nRating By: <@{result[1]}>"
+                descriptor += f"\nRating By: <@{rating.createdBy}>"
 
-            oldMessageID = result[8]
+            oldMessageID = rating.lastRelatedMessage
 
             # 3. DIRECTLY CONSTRUCT THE JUMP URL
             if guild_id and oldMessageID:
@@ -298,10 +301,22 @@ class AlbumRatings(commands.Cog):
                 database.setOne(
                     """
                     INSERT INTO `albumRatings` 
-                    (`ratingID`, `createdBy`, `createdAt`, `editedAt`, `ratingArtist`, `ratingAlbum`, `spotifyAlbumID`, `formattedRating`, `lastRelatedMessage`, `serializedRating`) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (`ratingID`, `createdBy`, `createdAt`, `editedAt`, `ratingArtist`, `ratingAlbum`, `spotifyAlbumID`, `formattedRating`, `trackAmount`, `lastRelatedMessage`, `serializedRating`) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    packedAlbumRating,
+                    (
+                        packedAlbumRating.ratingID,
+                        packedAlbumRating.createdBy,
+                        packedAlbumRating.createdAt,
+                        packedAlbumRating.editedAt,
+                        packedAlbumRating.ratingArtist,
+                        packedAlbumRating.ratingAlbum,
+                        packedAlbumRating.spotifyAlbumID,
+                        packedAlbumRating.formattedRating,
+                        packedAlbumRating.trackAmount,
+                        packedAlbumRating.lastRelatedMessage,
+                        packedAlbumRating.serializedRating,
+                    ),
                 )
 
                 await originalResponse.delete()
@@ -387,10 +402,10 @@ class AlbumRatings(commands.Cog):
                     "There were no ratings with that ID found!\n\nTry using the list command to narrow down your search."
                 )
 
-            packedRating = targetRating[0]
-            oldMessageID = packedRating[8]
+            rating = music.SmallRating(targetRating[0])
+            oldMessageID = rating.lastRelatedMessage
 
-            unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
+            unpackedRating = music.unpackAlbumRating(self.bot, rating.serializedRating)
 
             albumRatingEmbed = music.AlbumRatingEmbedReply(unpackedRating)
 
@@ -478,7 +493,9 @@ class AlbumRatings(commands.Cog):
             (id,),
         )
 
-        unpack = music.unpackAlbumRating(self.bot, initialSearch[0][-1])
+        rating = music.SmallRating(initialSearch[0])
+
+        unpack = music.unpackAlbumRating(self.bot, rating.serializedRating)
 
         unpack.createdBy = new
 
@@ -535,15 +552,17 @@ class AlbumRatings(commands.Cog):
                     f"No ratings found for query '{query}'.\n\nTry again with less keywords for a broader search."
                 )
 
-            initialSearchResult = initialSearch[0]
+            initialSearchResult = music.SmallRating(initialSearch[0])
 
             allRatingsForAlbumResult = database.get(
                 "SELECT * FROM albumRatings WHERE spotifyAlbumID = ? ORDER BY createdAt DESC",
-                (initialSearchResult[6],),
+                (initialSearchResult.spotifyAlbumID,),
             )
 
             unpackedRatings = [
-                music.unpackAlbumRating(self.bot, ratingResult[-1])
+                music.unpackAlbumRating(
+                    self.bot, music.SmallRating(ratingResult).serializedRating
+                )
                 for ratingResult in allRatingsForAlbumResult
             ]
 
@@ -597,6 +616,7 @@ class AlbumRatings(commands.Cog):
             sql += "ORDER BY createdAt DESC"
 
             results = database.get(sql, params)
+            results = [music.SmallRating(result) for result in results]
             # ----------------------------
 
             if not results:
@@ -667,6 +687,7 @@ class AlbumRatings(commands.Cog):
             sql += "ORDER BY createdAt DESC"
 
             results = database.get(sql, params)
+            results = [music.SmallRating(result) for result in results]
             # ----------------------------
 
             if not results:
@@ -714,6 +735,11 @@ class AlbumRatings(commands.Cog):
             description="Provide the guild member to inquiry ratings for.",
             required=False,
         ),  # type: ignore
+        include_singles: discord.Option(
+            bool,
+            description="Filter results such that there are no single track albums clogging up the list.",
+            default=False,
+        ),  # type: ignore
         ascending: discord.Option(
             bool,
             description="Filter in reverse order? (Worst album first.)",
@@ -728,14 +754,20 @@ class AlbumRatings(commands.Cog):
             database = LocalDatabase()
 
             sql = f"SELECT * FROM albumRatings WHERE createdBy = ?"
+
+            if not include_singles:
+                sql += f" AND trackAmount > {SINGLE_ALBUM_TRACK_CRITERIA}"
+
             params = (member.id,)
 
             results = database.get(sql, params)
 
             if not results:
                 raise Exception(
-                    f"The user {member.mention} does not have any ratings yet!\n\nGet started with `/albumratings create`"
+                    f"The user {member.mention} does not have any ratings that match the criteria yet!\n\nGet started with `/albumratings create`"
                 )
+
+            results = [music.SmallRating(result) for result in results]
 
             results.sort(key=music.sortByRating, reverse=not ascending)
 
@@ -743,7 +775,7 @@ class AlbumRatings(commands.Cog):
                 results,
                 self.bot,
                 "Album Ratings - List Top",
-                f"List of top ratings for {member.mention}, sorted in {"ascending" if ascending else "descending"} order. ({len(results)} Total)",
+                f"List of top ratings for {member.mention}, sorted in {"ascending" if ascending else "descending"} order. {"(No Singles)" if not include_singles else "(With Singles)"} ({len(results)} Total)",
             )
 
             pagignator = pages.Paginator(
@@ -805,9 +837,10 @@ class AlbumRatings(commands.Cog):
                     "There were no ratings with that ID found!\n\nTry using the list command to narrow down your search."
                 )
 
-            packedRating = targetRating[0]
-            oldMessageID = packedRating[8]
-            createdByID = packedRating[1]
+            rating = music.SmallRating(targetRating[0])
+
+            oldMessageID = rating.lastRelatedMessage
+            createdByID = rating.createdBy
             invokedBy: discord.User = ctx.user
 
             if (createdByID != invokedBy.id) and not (
@@ -817,7 +850,7 @@ class AlbumRatings(commands.Cog):
                     f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`"
                 )
 
-            unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
+            unpackedRating = music.unpackAlbumRating(self.bot, rating.serializedRating)
 
             firstTrack = unpackedRating.tracks[0]
 
@@ -897,10 +930,10 @@ class AlbumRatings(commands.Cog):
                     WHERE ratingID = ?
                     """,
                     (
-                        packedAlbumRating[3],
-                        packedAlbumRating[7],
-                        packedAlbumRating[8],
-                        packedAlbumRating[9],
+                        packedAlbumRating.editedAt,
+                        packedAlbumRating.formattedRating,
+                        packedAlbumRating.lastRelatedMessage,
+                        packedAlbumRating.serializedRating,
                         id,
                     ),
                 )
@@ -935,9 +968,9 @@ class AlbumRatings(commands.Cog):
                     WHERE ratingID = ?
                     """,
                     (
-                        packedAlbumRating[3],
-                        packedAlbumRating[7],
-                        packedAlbumRating[9],
+                        packedAlbumRating.editedAt,
+                        packedAlbumRating.formattedRating,
+                        packedAlbumRating.serializedRating,
                         id,
                     ),
                 )
@@ -966,16 +999,16 @@ class AlbumRatings(commands.Cog):
         if not targetRating:
             raise Exception("Rating not found in database.")
 
-        packedRating = targetRating[0]
-        oldMessageID = packedRating[8]
-        createdByID = packedRating[1]
+        rating = music.SmallRating(targetRating[0])
+        oldMessageID = rating.lastRelatedMessage
+        createdByID = rating.createdBy
 
         # Permission check
         if (createdByID != user.id) and not (await bot.is_owner(user)):
             raise Exception("You do not have permission to edit this rating.")
 
         # Unpack album rating and build initial view
-        unpackedRating = music.unpackAlbumRating(bot, packedRating[-1])
+        unpackedRating = music.unpackAlbumRating(bot, rating.serializedRating)
         firstTrack = unpackedRating.tracks[0]
 
         view = music.SongRatingView(unpackedRating)
@@ -1046,10 +1079,10 @@ class AlbumRatings(commands.Cog):
             WHERE ratingID = ?
             """,
             (
-                packedAlbumRating[3],
-                packedAlbumRating[7],
-                packedAlbumRating[8],
-                packedAlbumRating[9],
+                packedAlbumRating.editedAt,
+                packedAlbumRating.formattedRating,
+                packedAlbumRating.lastRelatedMessage,
+                packedAlbumRating.serializedRating,
                 ratingID,
             ),
         )
@@ -1128,9 +1161,10 @@ class AlbumRatings(commands.Cog):
                     "There were no ratings with that ID found!\n\nTry using the list command to narrow down your search."
                 )
 
-            packedRating = targetRating[0]
-            oldMessageID = packedRating[8]
-            createdByID = packedRating[1]
+            rating = music.SmallRating(targetRating[0])
+
+            oldMessageID = rating.lastRelatedMessage
+            createdByID = rating.createdBy
             invokedBy: discord.User = ctx.user
 
             if (createdByID != invokedBy.id) and not (
@@ -1140,7 +1174,7 @@ class AlbumRatings(commands.Cog):
                     f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`"
                 )
 
-            unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
+            unpackedRating = music.unpackAlbumRating(self.bot, rating.serializedRating)
 
             oldDate = unpackedRating.createdAt
             unpackedRating.createdAt = newDate
@@ -1200,9 +1234,9 @@ class AlbumRatings(commands.Cog):
                 WHERE ratingID = ?
                 """,
                 (
-                    packedAlbumRating[2],
-                    packedAlbumRating[8],
-                    packedAlbumRating[9],
+                    packedAlbumRating.createdAt,
+                    packedAlbumRating.lastRelatedMessage,
+                    packedAlbumRating.serializedRating,
                     id,
                 ),
             )
@@ -1251,9 +1285,10 @@ class AlbumRatings(commands.Cog):
                     "There were no ratings with that ID found!\n\nTry using the list command to narrow down your search."
                 )
 
-            packedRating = targetRating[0]
-            oldMessageID = packedRating[8]
-            createdByID = packedRating[1]
+            rating = music.SmallRating(targetRating[0])
+
+            oldMessageID = rating.lastRelatedMessage
+            createdByID = rating.createdBy
             invokedBy: discord.User = ctx.user
 
             if (createdByID != invokedBy.id) and not (
@@ -1263,7 +1298,7 @@ class AlbumRatings(commands.Cog):
                     f"That's not your rating!\n\nTo see a list of your ratings, use: `/albumrating list member member:@{invokedBy.name}`"
                 )
 
-            unpackedRating = music.unpackAlbumRating(self.bot, packedRating[-1])
+            unpackedRating = music.unpackAlbumRating(self.bot, rating.serializedRating)
 
             formattedCreatedAt = dates.formatSimpleDate(
                 unpackedRating.createdAt, discordDateFormat="d"
@@ -1367,13 +1402,16 @@ class AlbumRatings(commands.Cog):
 
             for i in res:
                 try:
+                    rating = music.SmallRating(i)
                     ratingChannel = await self.bot.fetch_channel(RATING_CHANNEL)
 
-                    targetMessage = await ratingChannel.fetch_message(i[-2])
+                    targetMessage = await ratingChannel.fetch_message(
+                        rating.lastRelatedMessage
+                    )
 
                     await targetMessage.edit(
                         view=music.FinishedRatingPersistentMessageButtonsView(
-                            f"https://open.spotify.com/album/{i[6]}",
+                            f"https://open.spotify.com/album/{rating.spotifyAlbumID}",
                         )
                     )
 
@@ -1397,6 +1435,50 @@ class AlbumRatings(commands.Cog):
             )
 
             await reply.send(ctx)
+
+    # @albumRatings.command(
+    #     description="Update the trackamounts buttons on all ratings. (OWNER ONLY)",
+    #     guild_ids=[799341195109203998],
+    # )
+    # async def updatetracks(
+    #     self,
+    #     ctx: discord.ApplicationContext,
+    # ):
+    #     if await self.bot.is_owner(ctx.user):
+    #         await ctx.defer()
+
+    #         database = LocalDatabase()
+
+    #         res = database.get("SELECT * FROM albumratings")
+
+    #         for i in res:
+    #             rating = music.SmallRating(i)
+
+    #             unpackedRating = music.unpackAlbumRating(
+    #                 self.bot, rating.serializedRating
+    #             )
+
+    #             database.setOne(
+    #                 "UPDATE albumRatings SET trackAmount = ? WHERE ratingID = ?",
+    #                 (len(unpackedRating.tracks), rating.ratingID),
+    #             )
+
+    #         reply = EmbedReply(
+    #             "Album Ratings - Update Views",
+    #             "albumratings",
+    #             description="All ratings updated!",
+    #         )
+
+    #         await reply.send(ctx)
+    #     else:
+    #         reply = EmbedReply(
+    #             "Album Ratings - Error",
+    #             "albumratings",
+    #             True,
+    #             description="You cannot use this command!",
+    #         )
+
+    #         await reply.send(ctx)
 
 
 def setup(bot):

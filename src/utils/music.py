@@ -171,7 +171,9 @@ class DeleteRatingButton(discord.ui.Button):
             await interaction.response.send_message(embed=reply, ephemeral=True)
             return
 
-        createdByID = result[0][1]
+        result = SmallRating(result[0])
+
+        createdByID = result.createdBy
         if (interaction.user.id != createdByID) and not (
             await interaction.client.is_owner(interaction.user)
         ):
@@ -193,8 +195,10 @@ class DeleteRatingButton(discord.ui.Button):
         )
 
         confirmationReply.add_field(
-            name=text.truncateString(f"{result[0][5]} · {result[0][4]}", 256)[0],
-            value=f"ID: {result[0][0]}",
+            name=text.truncateString(
+                f"{result.ratingAlbum} · {result.ratingArtist}", 256
+            )[0],
+            value=f"ID: {result.ratingID}",
         )
 
         confirmationReplyView = DeleteRatingView()
@@ -234,8 +238,10 @@ class DeleteRatingButton(discord.ui.Button):
             )
 
             reply.add_field(
-                name=text.truncateString(f"{result[0][5]} · {result[0][4]}", 256)[0],
-                value=f"ID: {result[0][0]}",
+                name=text.truncateString(
+                    f"{result.ratingAlbum} · {result.ratingArtist}", 256
+                )[0],
+                value=f"ID: {result.ratingID}",
             )
 
             await deleteResponse.edit_original_response(embed=reply, view=None)
@@ -861,6 +867,21 @@ class TrackRatingEmbedReply(EmbedReply):
         )
 
 
+class SmallRating:
+    def __init__(self, result: tuple):
+        self.ratingID = result[0]
+        self.createdBy = result[1]
+        self.createdAt = result[2]
+        self.editedAt = result[3]
+        self.ratingArtist = result[4]
+        self.ratingAlbum = result[5]
+        self.spotifyAlbumID = result[6]
+        self.formattedRating = result[7]
+        self.trackAmount = result[8]
+        self.lastRelatedMessage = result[9]
+        self.serializedRating = result[10]
+
+
 class Album:
     def __init__(
         self,
@@ -985,7 +1006,7 @@ class Album:
 
         return mean
 
-    def packAlbumRating(self, lastRelatedMessage: discord.Message) -> tuple:
+    def packAlbumRating(self, lastRelatedMessage: discord.Message) -> SmallRating:
         ratingID: str = self.ratingID
 
         createdBy: int = self.createdBy.id
@@ -1003,13 +1024,14 @@ class Album:
         ratingAlbum: str = self.name
         ratingAlbumSpotifyID: str = self.spotifyID
         formattedRating: str = self.meanRating(True)
+        trackAmount: int = len(self.tracks)
 
         lastRelatedMessage = lastRelatedMessage.id
 
         self.createdBy = self.createdBy.id
         serializedRating = pickle.dumps(self)
 
-        return (
+        tupRtg = (
             ratingID,
             createdBy,
             createdAt,
@@ -1018,9 +1040,12 @@ class Album:
             ratingAlbum,
             ratingAlbumSpotifyID,
             formattedRating,
+            trackAmount,
             lastRelatedMessage,
             serializedRating,
         )
+
+        return SmallRating(tupRtg)
 
     def addTrack(self, track: Track):
         track.album = self
@@ -1473,8 +1498,8 @@ def unpackAlbumRating(bot: discord.Bot, packedAlbumRating: bytes) -> Album:
     return unserializedAlbumRating
 
 
-def sortByRating(result: tuple) -> float:
-    rawRating: str = result[7].split("/")
+def sortByRating(result: SmallRating) -> float:
+    rawRating: str = result.formattedRating.split("/")
 
     score, outOf = float(rawRating[0]), float(rawRating[1])
 
