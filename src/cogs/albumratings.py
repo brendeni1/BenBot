@@ -1447,31 +1447,31 @@ class AlbumRatings(commands.Cog):
         if await self.bot.is_owner(ctx.user):
             await ctx.defer()
 
-            database = LocalDatabase()
+            # database = LocalDatabase()
 
-            res = database.get("SELECT * FROM albumratings")
+            # res = database.get("SELECT * FROM albumratings")
 
-            for i in res:
-                rating = music.SmallRating(i)
+            # for i in res:
+            #     rating = music.SmallRating(i)
 
-                unpackedRating = music.unpackAlbumRating(
-                    self.bot, rating.serializedRating
-                )
+            #     unpackedRating = music.unpackAlbumRating(
+            #         self.bot, rating.serializedRating
+            #     )
 
-                unpackedRating.customCoverImage = None
+            #     unpackedRating.customCoverImage = None
 
-                packed = unpackedRating.packAlbumRating(
-                    await self.bot.get_channel(RATING_CHANNEL).fetch_message(
-                        rating.lastRelatedMessage
-                    )
-                )
+            #     packed = unpackedRating.packAlbumRating(
+            #         await self.bot.get_channel(RATING_CHANNEL).fetch_message(
+            #             rating.lastRelatedMessage
+            #         )
+            #     )
 
-                database.setOne(
-                    "UPDATE albumRatings SET serializedRating = ? WHERE ratingID = ?",
-                    (packed.serializedRating, rating.ratingID),
-                )
+            #     database.setOne(
+            #         "UPDATE albumRatings SET serializedRating = ? WHERE ratingID = ?",
+            #         (packed.serializedRating, rating.ratingID),
+            #     )
 
-                await asyncio.sleep(0.1)
+            #     await asyncio.sleep(0.1)
 
             reply = EmbedReply(
                 "Album Ratings - Update All Objects",
