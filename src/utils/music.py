@@ -1390,14 +1390,30 @@ class CustomAlbumCoverModal(discord.ui.Modal):
             discord.ui.InputText(
                 style=discord.InputTextStyle.short,
                 label="Direct URL to Image (Leave Blank to Reset)",
-                max_length=2500,
                 value=obj.customCoverImage,
                 required=False,
             )
         )
 
     async def callback(self, ctx: discord.Interaction):
-        self.obj.setCoverImage(url=self.children[0].value, custom=True)
+        url = self.children[0].value
+
+        if url:
+            isImage = images.urlIsImage(url)
+
+            if not isImage:
+                errorEmbed = EmbedReply(
+                    "Album Ratings - Override Cover Art - Error",
+                    "albumratings",
+                    error=True,
+                    description="You supplied an invalid link; an image could not be found.\n\nPlease ensure that the link leads directly to an image.",
+                )
+
+                await ctx.response.send_message(embed=errorEmbed, ephemeral=True)
+
+                return
+
+        self.obj.setCoverImage(url=url, custom=True)
 
         await self.view.showTrackAndRating(ctx)
 

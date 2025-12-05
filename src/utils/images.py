@@ -59,3 +59,15 @@ async def fetchToFile(url: str, filename: str) -> discord.File:
 
     # Return Discord File object
     return discord.File(fp=buffer, filename=filename)
+
+
+def urlIsImage(url: str) -> bool:
+    try:
+        r = requests.head(url, allow_redirects=True, timeout=5)
+        if r.status_code != 200:
+            return False
+
+        content_type = r.headers.get("Content-Type", "")
+        return content_type.startswith("image/")
+    except requests.RequestException:
+        return False
