@@ -1,3 +1,5 @@
+DEFAULT_IMAGE = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQxsTcVDHm4n830jTn_4vnXiRJY-EzSJ2KprQ&s"
+
 RATINGS_OUT_OF = 10
 RATINGS_STEP = 0.5
 

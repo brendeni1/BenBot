@@ -519,9 +519,11 @@ class SongRatingView(discord.ui.View):
                 )
             )
 
-        self.add_item(EditCommentsButton("Edit Song Comments", track, row=2))
+        self.add_item(EditCommentsButton("Song Comments", track, row=2))
 
-        self.add_item(EditCommentsButton("Edit Album Comments", self.album, row=2))
+        self.add_item(EditCommentsButton("Album Comments", self.album, row=2))
+
+        self.add_item(CustomAlbumCoverButton(self.album, row=2))
 
         self.add_item(
             AlbumNavigationButton(
@@ -775,7 +777,7 @@ class ExcludeFromRatingButton(discord.ui.Button):
         self.track = track
 
         super().__init__(
-            label=f"Exclude From Rating",
+            label=f"Exclude Song",
             style=discord.ButtonStyle.secondary,
             emoji="↪️",
             **kwargs,
@@ -833,7 +835,7 @@ class TrackRatingEmbedReply(EmbedReply):
             description="Assign rating/comment, or favourite/exclude the song using the buttons/box below; move through the tracklist using the Next/Previous buttons. When all songs are rated, save using the Finish Rating button.",
         )
 
-        self.set_thumbnail(url=track.album.coverImage)
+        self.set_thumbnail(url=track.album.getCoverImage())
         self.colour = track.album.coverImageColour
         self.set_footer(
             text=f"Song data provided by Spotify®. Rating ID: {track.album.ratingID}",
@@ -894,9 +896,10 @@ class Album:
         createdAt: datetime = dates.simpleDateObj(timeNow=True),
         editedAt: datetime | None = None,
         tracks: list[Track] | None = None,
-        ratingOutOf: int | float = constants.RATINGS_OUT_OF,
-        coverImage: str = None,
-        coverImageColour: str = None,
+        ratingOutOf: int | float | None = constants.RATINGS_OUT_OF,
+        coverImage: str | None = None,
+        customCoverImage: str | None = None,
+        coverImageColour: str | None = None,
         comments: str = None,
     ):
         self.ratingID = uuid4().hex
@@ -911,6 +914,7 @@ class Album:
         self.tracks = tracks if tracks is not None else []
         self.ratingOutOf = ratingOutOf
         self.coverImage = coverImage
+        self.customCoverImage = customCoverImage
         self.coverImageColour = coverImageColour
         self.comments = comments
 
@@ -1061,6 +1065,26 @@ class Album:
     def setComments(self, comments: str | None):
         self.comments = comments
 
+    def getCoverImage(self, *, includeCustom: bool = True) -> str:
+        return (
+            self.customCoverImage
+            if self.customCoverImage and includeCustom
+            else self.coverImage
+        )
+
+    def setCoverImage(self, *, url: str | None = None, custom: bool = False):
+        if url:
+            if custom:
+                self.customCoverImage = url
+            else:
+                self.coverImage = url
+        else:
+            self.customCoverImage = None
+
+        self.coverImageColour = discord.Colour.from_rgb(
+            *(int(i) for i in images.extractColours(self.getCoverImage())[0])
+        )
+
     def parseComments(
         self, formatted: bool = False, overrideCommentTruncate: int = 2000
     ):
@@ -1108,6 +1132,21 @@ class EditCommentsButton(discord.ui.Button):
         await ctx.response.send_modal(EditCommentsModal(self.obj, self.view))
 
 
+class CustomAlbumCoverButton(discord.ui.Button):
+    def __init__(self, obj: Album, **kwargs):
+        self.obj = obj
+
+        super().__init__(
+            label="Override Cover Art",
+            style=discord.ButtonStyle.secondary,
+            emoji="🖼️",
+            **kwargs,
+        )
+
+    async def callback(self, ctx: discord.ApplicationContext):
+        await ctx.response.send_modal(CustomAlbumCoverModal(self.obj, self.view))
+
+
 class AlbumRatingEmbedReply(EmbedReply):
     def __init__(self, album: Album | list[Album]):
         isAveraged = isinstance(album, list)
@@ -1124,7 +1163,7 @@ class AlbumRatingEmbedReply(EmbedReply):
             title, "albumratings", url=targetAlbumDetails.link, description=""
         )
 
-        self.set_thumbnail(url=targetAlbumDetails.coverImage)
+        self.set_thumbnail(url=targetAlbumDetails.getCoverImage())
         self.colour = targetAlbumDetails.coverImageColour
         self.set_footer(
             text=f"Album data provided by Spotify®."
@@ -1336,6 +1375,33 @@ class EditCommentsModal(discord.ui.Modal):
         await self.view.showTrackAndRating(ctx)
 
 
+class CustomAlbumCoverModal(discord.ui.Modal):
+    def __init__(self, obj: Album, view: SongRatingView, *args, **kwargs) -> None:
+        self.obj = obj
+        self.view = view
+
+        super().__init__(
+            title=text.truncateString(f"Custom Cover For {obj.name}", 45)[0],
+            *args,
+            **kwargs,
+        )
+
+        self.add_item(
+            discord.ui.InputText(
+                style=discord.InputTextStyle.short,
+                label="Direct URL to Image (Leave Blank to Reset)",
+                max_length=2500,
+                value=obj.customCoverImage,
+                required=False,
+            )
+        )
+
+    async def callback(self, ctx: discord.Interaction):
+        self.obj.setCoverImage(url=self.children[0].value, custom=True)
+
+        await self.view.showTrackAndRating(ctx)
+
+
 class SelectAlbum(discord.ui.Select):
     def __init__(self, choices: dict):
         super().__init__(
@@ -1443,14 +1509,7 @@ def parseAlbumDetails(
     link = data["external_urls"]["spotify"]
     releaseDate = dates.simpleDateObj(data["release_date"])
 
-    coverImage = None if not data["images"] else data["images"][0]["url"]
-
-    coverImageColour = None
-
-    if coverImage:
-        coverImageColour = discord.Colour.from_rgb(
-            *(int(i) for i in images.extractColours(coverImage)[0])
-        )
+    coverImageURL = None if not data["images"] else data["images"][0]["url"]
 
     album = Album(
         spotifyID,
@@ -1461,10 +1520,10 @@ def parseAlbumDetails(
         createdBy,
         createdAt if createdAt else dates.simpleDateObj(timeNow=True),
         ratingOutOf=ratingOutOf,
-        coverImage=coverImage,
-        coverImageColour=coverImageColour,
         comments=comments,
     )
+
+    album.setCoverImage(url=coverImageURL)
 
     rawTracks: list[dict] = data["tracks"]["items"][:trackLimit]
 

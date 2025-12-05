@@ -1436,49 +1436,59 @@ class AlbumRatings(commands.Cog):
 
             await reply.send(ctx)
 
-    # @albumRatings.command(
-    #     description="Update the trackamounts buttons on all ratings. (OWNER ONLY)",
-    #     guild_ids=[799341195109203998],
-    # )
-    # async def updatetracks(
-    #     self,
-    #     ctx: discord.ApplicationContext,
-    # ):
-    #     if await self.bot.is_owner(ctx.user):
-    #         await ctx.defer()
+    @albumRatings.command(
+        description="Update the objects in the DB on all ratings. (OWNER ONLY)",
+        guild_ids=[799341195109203998],
+    )
+    async def updateallobjects(
+        self,
+        ctx: discord.ApplicationContext,
+    ):
+        if await self.bot.is_owner(ctx.user):
+            await ctx.defer()
 
-    #         database = LocalDatabase()
+            database = LocalDatabase()
 
-    #         res = database.get("SELECT * FROM albumratings")
+            res = database.get("SELECT * FROM albumratings")
 
-    #         for i in res:
-    #             rating = music.SmallRating(i)
+            for i in res:
+                rating = music.SmallRating(i)
 
-    #             unpackedRating = music.unpackAlbumRating(
-    #                 self.bot, rating.serializedRating
-    #             )
+                unpackedRating = music.unpackAlbumRating(
+                    self.bot, rating.serializedRating
+                )
 
-    #             database.setOne(
-    #                 "UPDATE albumRatings SET trackAmount = ? WHERE ratingID = ?",
-    #                 (len(unpackedRating.tracks), rating.ratingID),
-    #             )
+                unpackedRating.customCoverImage = None
 
-    #         reply = EmbedReply(
-    #             "Album Ratings - Update Views",
-    #             "albumratings",
-    #             description="All ratings updated!",
-    #         )
+                packed = unpackedRating.packAlbumRating(
+                    await self.bot.get_channel(RATING_CHANNEL).fetch_message(
+                        rating.lastRelatedMessage
+                    )
+                )
 
-    #         await reply.send(ctx)
-    #     else:
-    #         reply = EmbedReply(
-    #             "Album Ratings - Error",
-    #             "albumratings",
-    #             True,
-    #             description="You cannot use this command!",
-    #         )
+                database.setOne(
+                    "UPDATE albumRatings SET serializedRating = ? WHERE ratingID = ?",
+                    (packed.serializedRating, rating.ratingID),
+                )
 
-    #         await reply.send(ctx)
+                await asyncio.sleep(0.1)
+
+            reply = EmbedReply(
+                "Album Ratings - Update All Objects",
+                "albumratings",
+                description="All ratings updated!",
+            )
+
+            await reply.send(ctx)
+        else:
+            reply = EmbedReply(
+                "Album Ratings - Update All Objects - Error",
+                "albumratings",
+                True,
+                description="You cannot use this command!",
+            )
+
+            await reply.send(ctx)
 
 
 def setup(bot):
