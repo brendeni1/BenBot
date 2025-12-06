@@ -504,7 +504,7 @@ class AlbumRatings(commands.Cog):
 
         unpack = music.unpackAlbumRating(self.bot, rating.serializedRating)
 
-        unpack.createdBy = new
+        unpack.setCreatedBy(new)
 
         pack = unpack.packAlbumRating(msg)
 
@@ -515,8 +515,8 @@ class AlbumRatings(commands.Cog):
             WHERE ratingID = ?
             """,
             (
-                pack[1],
-                pack[-1],
+                pack.createdBy,
+                pack.serializedRating,
                 id,
             ),
         )

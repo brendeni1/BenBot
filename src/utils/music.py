@@ -1065,6 +1065,9 @@ class Album:
     def setComments(self, comments: str | None):
         self.comments = comments
 
+    def setCreatedBy(self, user: discord.User):
+        self.createdBy = user
+
     def getCoverImage(self, *, includeCustom: bool = True) -> str:
         return (
             self.customCoverImage
