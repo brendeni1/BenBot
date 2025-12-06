@@ -566,10 +566,12 @@ class AlbumRatings(commands.Cog):
                 (initialSearchResult.spotifyAlbumID,),
             )
 
+            allRatingsForAlbumResult = [
+                music.SmallRating(rating) for rating in allRatingsForAlbumResult
+            ]
+
             unpackedRatings = [
-                music.unpackAlbumRating(
-                    self.bot, music.SmallRating(ratingResult).serializedRating
-                )
+                music.unpackAlbumRating(self.bot, ratingResult.serializedRating)
                 for ratingResult in allRatingsForAlbumResult
             ]
 
@@ -583,6 +585,7 @@ class AlbumRatings(commands.Cog):
                 ),
             )
         except Exception as e:
+            raise e
             reply = EmbedReply(
                 "Album Ratings - Album Rating Average",
                 "albumratings",

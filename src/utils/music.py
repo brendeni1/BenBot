@@ -1205,7 +1205,7 @@ class AlbumRatingEmbedReply(EmbedReply):
                     comments = currentSelectedTrackObject.parseComments()
 
                     formattedDetailsBelowTrack += (
-                        f"\n\u00a0\u00a0\u00a0\u00a0⤷ {rating.createdBy.mention} 💬 {text.truncateString(comments, COMMENT_LENGTH_CHARACTER_LIMIT_IN_EMBED / 2)[0]}"
+                        f"\n\u00a0\u00a0\u00a0\u00a0⤷ {rating.createdBy.mention} 💬 {text.truncateString(comments, COMMENT_LENGTH_CHARACTER_LIMIT_IN_EMBED // 2)[0]}"
                         if comments
                         else ""
                     )
