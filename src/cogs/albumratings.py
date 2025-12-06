@@ -577,15 +577,8 @@ class AlbumRatings(commands.Cog):
 
             reply = music.AlbumRatingEmbedReply(unpackedRatings)
 
-            await reply.send(
-                ctx,
-                ephemeral=ephemeral,
-                view=music.FinishedRatingPersistentMessageButtonsView(
-                    unpackedRatings[0].link,
-                ),
-            )
+            await reply.send(ctx, ephemeral=ephemeral)
         except Exception as e:
-            raise e
             reply = EmbedReply(
                 "Album Ratings - Album Rating Average",
                 "albumratings",
