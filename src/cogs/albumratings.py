@@ -189,6 +189,10 @@ class AlbumRatings(commands.Cog):
                     (albumChoiceID, ctx.user.id),
                 )
 
+                matchingDuplicateRatings = [
+                    music.SmallRating(rating) for rating in matchingDuplicateRatings
+                ]
+
                 if matchingDuplicateRatings:
                     confirmView = music.DuplicateRatingConfirmationView(
                         originalUser=ctx.user
@@ -344,7 +348,10 @@ class AlbumRatings(commands.Cog):
                 continue
             except Exception as e:
                 reply = EmbedReply(
-                    "Album Ratings - Error", "albumratings", True, description=str(e)
+                    "Album Ratings - Create Rating - Error",
+                    "albumratings",
+                    True,
+                    description=str(e),
                 )
 
                 await reply.send(ctx, ephemeral=True)
