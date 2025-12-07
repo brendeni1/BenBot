@@ -1,7 +1,6 @@
 import discord
 import os
 from datetime import datetime
-from uuid import uuid4
 import pickle
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
@@ -902,7 +901,7 @@ class Album:
         coverImageColour: str | None = None,
         comments: str = None,
     ):
-        self.ratingID = uuid4().hex
+        self.ratingID = text.generateUUID()
         self.spotifyID = spotifyID
         self.name = name
         self.artists = artists
@@ -1015,11 +1014,9 @@ class Album:
 
         createdBy: int = self.createdBy.id
 
-        createdAt: str = dates.formatSimpleDate(
-            self.createdAt, formatString="%Y-%m-%d %H:%M:%S"
-        )
+        createdAt: str = dates.formatSimpleDate(self.createdAt, databaseDate=True)
         editedAt: str | None = (
-            dates.formatSimpleDate(self.editedAt, formatString="%Y-%m-%d %H:%M:%S")
+            dates.formatSimpleDate(self.editedAt, databaseDate=True)
             if self.editedAt
             else None
         )

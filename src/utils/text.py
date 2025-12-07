@@ -1,6 +1,11 @@
+from uuid import uuid4
 from rapidfuzz import process
 
 from src import constants
+
+
+def generateUUID():
+    return uuid4().hex
 
 
 def truncateString(

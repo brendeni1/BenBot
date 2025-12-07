@@ -11,7 +11,7 @@ from src.utils.terminal import cls
 dotenv.load_dotenv()
 
 # Constants.
-OWNER = int(os.getenv("OWNER")) # type: ignore
+OWNER = int(os.getenv("OWNER"))  # type: ignore
 COGS_PATH = "src.cogs"
 BOT_TOKEN = os.getenv("DISCORD_TOKEN")
 
@@ -25,15 +25,17 @@ intents = discord.Intents.all()
 # Generate the bot.
 bot = Bot(intents=intents, owner_id=OWNER)
 
-# Log messages.
+
+# Log messages in console.
 @bot.event
 async def on_message(m: discord.Message):
     if m.author == bot.user:
         return
-    
+
     print(f"{m.guild} -> {m.channel} - {m.author} said: {m.content}")
 
-bot.load_extension(COGS_PATH)
+
+bot.load_extension(COGS_PATH, recursive=True)
 
 # Run the bot.
 bot.run(BOT_TOKEN)

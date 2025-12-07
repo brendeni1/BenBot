@@ -53,6 +53,7 @@ def formatSimpleDate(
     includeTime: bool = True,
     timeNow: bool = False,
     discordDateFormat: str = None,
+    databaseDate: bool = False,
     relativity: bool = True,
     weekday: bool = False,
 ) -> str:
@@ -77,6 +78,9 @@ def formatSimpleDate(
 
     timeNow : bool, default=False
         If True, uses the current system time instead of requiring a `timestamp`.
+
+    databaseDate : bool, default=False
+        If True, format the date for use in the DB which makes it sortable.
 
     discordDateFormat : str, optional
         A Discord timestamp style code (e.g., "F", "R"). Takes precedence.
@@ -127,6 +131,9 @@ def formatSimpleDate(
 
     # Check if the resolved object has a time component.
     has_time_component = isinstance(obj, datetime.datetime)
+
+    if databaseDate:
+        return obj.strftime("%Y-%m-%d %H:%M:%S")
 
     # --- 2. Handle Discord Format (requires a datetime) ---
     if discordDateFormat:
