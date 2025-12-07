@@ -18,13 +18,9 @@ class CommandLogging(commands.Cog):
 
     @commands.Cog.listener()
     async def on_application_command(self, ctx):
-        try:
-            logEntryObj = await commandLogs.contextToLogEntry(ctx)
+        logEntryObj = await commandLogs.contextToLogEntry(ctx)
 
-            commandLogs.insertLogEntry(logEntryObj)
-        except Exception as e:
-            raise e
-            print(f"Error when logging command: {e}")
+        commandLogs.insertLogEntry(logEntryObj)
 
 
 def setup(bot):
