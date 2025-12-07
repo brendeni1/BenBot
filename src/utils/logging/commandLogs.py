@@ -7,31 +7,6 @@ from src.utils import dates
 from src.classes import *
 
 
-class CommandLogEntry(logClasses.LogEntry):
-    def __init__(
-        self,
-        *,
-        customID: str = None,
-        customTimestamp: datetime.datetime = None,
-        qualifiedCommandName: str,
-        invocationGuildID: int = None,
-        invocationGuildName: str,
-        invocationChannelID: int = None,
-        invocationChannelName: str,
-        invocationUserID: int,
-        invocationOptions: list[dict] = None,
-    ):
-        super().__init__(customID=customID, customTimestamp=customTimestamp)
-
-        self.qualifiedCommandName = qualifiedCommandName
-        self.invocationGuildID = invocationGuildID
-        self.invocationGuildName = invocationGuildName
-        self.invocationChannelID = invocationChannelID
-        self.invocationChannelName = invocationChannelName
-        self.invocationUserID = invocationUserID
-        self.invocationOptions = invocationOptions
-
-
 def flattenCommandOptions(
     options: list[dict], string: bool = True
 ) -> dict[str, str] | str | None:
@@ -48,7 +23,7 @@ def flattenCommandOptions(
 
 async def contextToLogEntry(
     ctx: discord.ApplicationContext,
-) -> CommandLogEntry:
+) -> logClasses.CommandLogEntry:
     qualifiedCommandName = ctx.command.qualified_name
     guildID = ctx.guild_id
     guildName = ctx.guild.name if ctx.guild else "DM"
@@ -58,7 +33,7 @@ async def contextToLogEntry(
 
     flattenedOptions = flattenCommandOptions(ctx.selected_options, string=True)
 
-    entryObj = CommandLogEntry(
+    entryObj = logClasses.CommandLogEntry(
         qualifiedCommandName=qualifiedCommandName,
         invocationGuildID=guildID,
         invocationGuildName=guildName,
@@ -71,7 +46,7 @@ async def contextToLogEntry(
     return entryObj
 
 
-def insertLogEntry(entry: CommandLogEntry):
+def insertLogEntry(entry: logClasses.CommandLogEntry):
     database = LocalDatabase(database="logs")
 
     sql = """

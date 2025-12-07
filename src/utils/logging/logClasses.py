@@ -17,3 +17,28 @@ class LogEntry:
             if customTimestamp is not None
             else dates.simpleDateObj(timeNow=True)
         )
+
+
+class CommandLogEntry(LogEntry):
+    def __init__(
+        self,
+        *,
+        customID: str = None,
+        customTimestamp: datetime.datetime = None,
+        qualifiedCommandName: str,
+        invocationGuildID: int = None,
+        invocationGuildName: str,
+        invocationChannelID: int = None,
+        invocationChannelName: str,
+        invocationUserID: int,
+        invocationOptions: list[dict] = None,
+    ):
+        super().__init__(customID=customID, customTimestamp=customTimestamp)
+
+        self.qualifiedCommandName = qualifiedCommandName
+        self.invocationGuildID = invocationGuildID
+        self.invocationGuildName = invocationGuildName
+        self.invocationChannelID = invocationChannelID
+        self.invocationChannelName = invocationChannelName
+        self.invocationUserID = invocationUserID
+        self.invocationOptions = invocationOptions
