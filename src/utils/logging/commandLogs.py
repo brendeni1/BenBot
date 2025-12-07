@@ -21,7 +21,7 @@ def flattenCommandOptions(
     return str(flattenedOptions) if string else flattenedOptions
 
 
-async def contextToLogEntry(
+def contextToLogEntry(
     ctx: discord.ApplicationContext,
 ) -> logClasses.CommandLogEntry:
     qualifiedCommandName = ctx.command.qualified_name
@@ -41,6 +41,35 @@ async def contextToLogEntry(
         invocationChannelName=channelName,
         invocationUserID=userID,
         invocationOptions=flattenedOptions,
+    )
+
+    return entryObj
+
+
+def dbResultToLogEntry(
+    result: tuple,
+) -> logClasses.CommandLogEntry:
+    entryID = result[0]
+    entryTimestamp = dates.simpleDateObj(result[1])
+    qualifiedCommandName = result[2]
+    guildID = result[3]
+    guildName = result[4]
+    channelID = result[5]
+    channelName = result[6]
+    userID = result[7]
+
+    options = result[8]
+
+    entryObj = logClasses.CommandLogEntry(
+        customID=entryID,
+        customTimestamp=entryTimestamp,
+        qualifiedCommandName=qualifiedCommandName,
+        invocationGuildID=guildID,
+        invocationGuildName=guildName,
+        invocationChannelID=channelID,
+        invocationChannelName=channelName,
+        invocationUserID=userID,
+        invocationOptions=options,
     )
 
     return entryObj

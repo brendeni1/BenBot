@@ -18,7 +18,7 @@ class CommandLogging(commands.Cog):
 
     @commands.Cog.listener()
     async def on_application_command(self, ctx):
-        logEntryObj = await commandLogs.contextToLogEntry(ctx)
+        logEntryObj = commandLogs.contextToLogEntry(ctx)
 
         commandLogs.insertLogEntry(logEntryObj)
 

@@ -31,7 +31,7 @@ class CommandLogEntry(LogEntry):
         invocationChannelID: int = None,
         invocationChannelName: str,
         invocationUserID: int,
-        invocationOptions: list[dict] = None,
+        invocationOptions: str = None,
     ):
         super().__init__(customID=customID, customTimestamp=customTimestamp)
 
@@ -42,3 +42,6 @@ class CommandLogEntry(LogEntry):
         self.invocationChannelName = invocationChannelName
         self.invocationUserID = invocationUserID
         self.invocationOptions = invocationOptions
+
+    def optionsToDict(self) -> dict[str]:
+        return dict(self.invocationOptions)
