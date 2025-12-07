@@ -788,6 +788,9 @@ class ExcludeFromRatingButton(discord.ui.Button):
         self.track.setRating(-1)
         self.track.setFavouriteIndex(None)
 
+        if view.index + 1 < view.album.totalTracks():
+            view.index += 1
+
         await view.showTrackAndRating(ctx)
 
 
