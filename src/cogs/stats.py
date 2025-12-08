@@ -6,7 +6,7 @@ from src.classes import *
 from src import constants
 from src.utils import stats
 
-LEADERBOARD_AMOUNT = 5
+LEADERBOARD_AMOUNT = 10
 
 
 class StatsCommand(commands.Cog):
