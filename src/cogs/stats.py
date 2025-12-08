@@ -80,7 +80,6 @@ class StatsCommand(commands.Cog):
             await reply.send(ctx)
 
         except Exception as e:
-            raise e
             reply = EmbedReply(
                 "Stats - Command Usage - Error",
                 "",
