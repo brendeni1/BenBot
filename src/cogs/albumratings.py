@@ -31,7 +31,7 @@ async def paginateRatingList(
     *,
     showUserInResults: bool = False,
     showRatingInResults: bool = True,
-) -> list[pages.Page]:
+) -> list[discord.Embed]:
     pageList = []
 
     # 1. Get Channel object and Guild ID ONCE
