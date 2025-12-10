@@ -1028,7 +1028,7 @@ class Album:
         ratingAlbum: str = self.name
         ratingAlbumSpotifyID: str = self.spotifyID
         formattedRating: str = self.meanRating(True)
-        trackAmount: int = len(self.tracks)
+        trackAmount: int = self.totalTracks()
 
         lastRelatedMessage = lastRelatedMessage.id
 

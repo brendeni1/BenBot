@@ -17,10 +17,12 @@ class MyCog(commands.Cog):
         description="Template for commands.", guild_ids=[799341195109203998]
     )
     async def command(self, ctx: discord.ApplicationContext):
+        await ctx.defer()
+
         try:
             pass
         except Exception as e:
-            reply = EmbedReply("- - Error", "", error=True, description=f"Error: {e}")
+            reply = EmbedReply(" -  - Error", "", error=True, description=f"Error: {e}")
 
             await reply.send(ctx)
 
