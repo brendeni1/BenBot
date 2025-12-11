@@ -1328,7 +1328,7 @@ class AlbumRatingEmbedReply(EmbedReply):
 
         if targetAlbumDetails.editedAt and not isAveraged:
             self.add_field(
-                name="***Rating Edited***",
+                name="***Rating Edited On***",
                 value=f"{dates.formatSimpleDate(targetAlbumDetails.editedAt, discordDateFormat="f")}",
                 inline=True,
             )
