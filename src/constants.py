@@ -3,6 +3,24 @@ DEFAULT_IMAGE = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQxsTcVDHm
 RATINGS_OUT_OF = 10
 RATINGS_STEP = 0.5
 
+CURRENCIES = [
+    {
+        "name": "United States Dollar",
+        "shortName": "USD",
+        "symbol": "$",
+    },
+    {
+        "name": "Russian Rouble",
+        "shortName": "RUB",
+        "symbol": "₽",
+    },
+    {
+        "name": "Euro",
+        "shortName": "EUR",
+        "symbol": "€",
+    },
+]
+
 EMOJI_MAP = {
     "0": "0️⃣",
     "1": "1️⃣",

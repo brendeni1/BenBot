@@ -5,8 +5,6 @@ from discord.ext import commands
 from src.classes import *
 from src.utils import tarkov
 
-ITEM_SEARCH_QUERY_RETURN_LIMIT = 10
-
 
 class TarkovItemCommands(commands.Cog):
     ISCOG = True
@@ -32,17 +30,20 @@ class TarkovItemCommands(commands.Cog):
         description="Search for an item by name or tarkov.dev ID.",
         guild_ids=[799341195109203998],
     )
-    async def search(self, ctx: discord.ApplicationContext, term: discord.Option(str, description="An in-game item to search for.", required=True), id: discord.Option(bool, description="Whether the item provided is an ID. (Must be a tarkov.dev ID)", default=False)):  # type: ignore
+    async def search(self, ctx: discord.ApplicationContext, query: discord.Option(str, description="An in-game item to search for.", required=True), by_id: discord.Option(bool, description="Whether the item provided is an ID. (Must be a tarkov.dev ID)", default=False)):  # type: ignore
         try:
             await ctx.defer()
 
-            searchKey = "ids" if id else "names"
+            relevantItems = tarkov.fetchItems(itemQuery=query, byId=by_id)
 
-            query = f'{{ items({searchKey}: ["{term}"], limit: {ITEM_SEARCH_QUERY_RETURN_LIMIT}) {{ id, name }} }}'
+            if not relevantItems:
+                raise Exception("No items found for that query!")
 
-            queryResponse = tarkov.fetch(query=query)
+            item = relevantItems[0]
 
-            await ctx.followup.send(str(queryResponse), ephemeral=True)
+            embed = item.toEmbed()
+
+            await embed.send(ctx)
         except Exception as e:
             raise e
             reply = EmbedReply(
