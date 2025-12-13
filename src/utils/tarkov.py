@@ -1,6 +1,7 @@
 import discord
 import requests
 import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 from src.utils import dates
 from src.utils import text
@@ -8,7 +9,7 @@ from src import constants
 
 from src.classes import *
 
-ITEM_SEARCH_QUERY_RETURN_LIMIT = 10
+ITEM_SEARCH_QUERY_RETURN_LIMIT = 25
 
 DEFAULT_CURRENCY = "RUB"
 
@@ -154,15 +155,45 @@ class HideoutStation:
         slug: str,
         image: str,
         crafts: list["Craft"] = None,
+        levels: list["HideoutStationLevel"] = None,
     ):
         self.id = id
         self.name = name
         self.slug = slug
         self.image = image
         self.crafts = crafts if crafts is not None else []
+        self.levels = levels if levels is not None else []
 
     def __str__(self):
         return self.name.title()
+
+
+class HideoutStationLevel:
+    def __init__(
+        self,
+        *,
+        id: str,
+        station: HideoutStation,
+        description: str,
+        level: int,
+        constructionTime: int,
+        itemRequirements: list["ContainedItem"],
+    ):
+        self.id = id
+        self.station = station
+        self.description = description
+        self.level = level
+        self.constructionTime = constructionTime
+        self.itemRequirements = itemRequirements
+
+    def getDescription(self, formatted: bool = True) -> str:
+        if formatted:
+            return self.description or "*(No Description Available)*"
+        else:
+            return self.description
+
+    def __str__(self):
+        return f"• Level {self.level} *({dates.formatSeconds(self.constructionTime) if self.constructionTime else "Instant"})*"
 
 
 class Craft:
@@ -377,6 +408,7 @@ class Item:
         bartersUsing: list["Barter"],
         craftsFor: list["Craft"],
         craftsUsing: list["Craft"],
+        hideoutUpgradesUsing: list["HideoutStationLevel"],
     ):
         self.id = id
         self.name = name
@@ -416,6 +448,8 @@ class Item:
 
         self.craftsFor = craftsFor
         self.craftsUsing = craftsUsing
+
+        self.hideoutUpgradesUsing = hideoutUpgradesUsing
 
     def getDescription(self, formatted: bool = True) -> str:
         if formatted:
@@ -507,7 +541,7 @@ class Item:
                     )
                 )
                 if self.tasksUsed
-                else "*(No Tasks)*"
+                else "*(No Quests Needing Item)*"
             ),
         )
 
@@ -520,7 +554,7 @@ class Item:
                     )
                 )
                 if self.tasksRecieved
-                else "*(No Tasks)*"
+                else "*(No Quests Rewarding Item)*"
             ),
         )
 
@@ -530,6 +564,46 @@ class Item:
         )
 
         embeds.append(questDetailEmbed)
+
+        # HIDEOUT LEVEL EMBED
+
+        hideoutDetailEmbed = TarkovEmbedReply(
+            title=f"Hideout - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
+            url=baseUrl + "#Hideout",
+        )
+
+        hideoutDetailEmbed.set_thumbnail(url=self.gridImage)
+
+        levelsByStation: dict[str, list] = {}
+
+        for level in self.hideoutUpgradesUsing:
+
+            stationName = level.station.name.title()
+
+            if stationName not in levelsByStation:
+                levelsByStation[stationName] = []
+
+            levelsByStation[stationName].append(level)
+
+        for station in levelsByStation:
+            hideoutDetailEmbed.add_field(
+                name=station,
+                value="\n".join(
+                    text.truncateList(
+                        [str(l) for l in levelsByStation[station]], limit=1024
+                    )
+                ),
+            )
+
+        if not levelsByStation:
+            hideoutDetailEmbed.description = "*(Not Used In Any Hideout Upgrades)*"
+
+        hideoutDetailEmbed.set_footer(
+            text=f"Hideout data provided by tarkov.dev · Item ID: {self.id}",
+            icon_url="https://tarkov.dev/apple-touch-icon.png",
+        )
+
+        embeds.append(hideoutDetailEmbed)
 
         # CRAFTS EMBEDS
 
@@ -792,14 +866,169 @@ class ContainedItem:
         return f"{self.item.shortName} (*x{self.quantity}*)"
 
 
+def apiFetch(query: str) -> dict:
+    headers = {"Content-Type": "application/json"}
+
+    response = requests.post(
+        "https://api.tarkov.dev/graphql", headers=headers, json={"query": query}
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+def parseSimplePrice(amount):
+    if amount is None:
+        return None
+
+    return ItemPrice(price=amount, priceRUB=amount)
+
+
+def parseOffer(offerData):
+    return ItemOffer(
+        vendor=Vendor(
+            name=offerData["vendor"]["name"],
+            slug=offerData["vendor"]["normalizedName"],
+        ),
+        price=ItemPrice(
+            currency=next(
+                filter(
+                    lambda c: c["shortName"] == offerData["currency"],
+                    constants.CURRENCIES,
+                )
+            ),
+            price=offerData["price"],
+            priceRUB=offerData["priceRUB"],
+        ),
+    )
+
+
+def parseCategory(category):
+    return ItemCategory(
+        id=category["id"],
+        name=str(category.get("name", "")).title(),
+        slug=category.get("normalizedName", ""),
+    )
+
+
+def parseTrader(traderData):
+    return Trader(
+        name=traderData["name"],
+        description=traderData.get("description", ""),
+        image=traderData.get("image4xLink", ""),
+    )
+
+
+def parseHideoutStationLevel(levelData, station: HideoutStation):
+    return HideoutStationLevel(
+        id=levelData["id"],
+        station=station,
+        description=levelData.get("description", ""),
+        level=levelData.get("level", 1),
+        constructionTime=levelData.get("constructionTime", ""),
+        itemRequirements=[
+            parseNestedItem(i) for i in levelData.get("itemRequirements", [])
+        ],
+    )
+
+
+def parseNestedItem(wrapper):
+    i = wrapper["item"]
+
+    item = SmallItem(
+        id=i["id"],
+        name=i["name"],
+        shortName=i["shortName"],
+        slug=i["normalizedName"],
+        description=i.get("description", ""),
+        weight=i.get("weight", ""),
+        width=i.get("width", ""),
+        height=i.get("height", ""),
+        itemImage=i["image512pxLink"],
+        inspectImage=i["inspectImageLink"],
+        gridImage=i["gridImageLink"],
+        wikiLink=i.get("wikiLink", ""),
+        apiLink=i.get("link", ""),
+    )
+
+    return ContainedItem(
+        item=item,
+        count=wrapper.get("count", 0),
+        quantity=wrapper.get("quantity", 0),
+    )
+
+
+def fetchHideoutStations() -> list[HideoutStation]:
+    hideoutQuery = """
+    {
+        hideoutStations(lang: en) {
+            id
+            name
+            normalizedName
+            imageLink
+            levels {
+                id
+                description
+                level
+                constructionTime
+                itemRequirements {
+                    item {
+                        id
+                        name
+                        shortName
+                        normalizedName
+                        description
+                        width
+                        height
+                        weight
+                        image512pxLink
+                        gridImageLink
+                        inspectImageLink
+                        wikiLink
+                        link
+                    }
+                    count
+                    quantity
+                }
+            }
+        }
+    }
+    """
+
+    rawHideoutResponseData = apiFetch(query=hideoutQuery)
+
+    parsedHideoutStations: list[HideoutStation] = []
+
+    if (
+        "data" in rawHideoutResponseData
+        and "hideoutStations" in rawHideoutResponseData["data"]
+    ):
+        for stationData in rawHideoutResponseData["data"]["hideoutStations"]:
+            station = HideoutStation(
+                id=stationData.get("id"),
+                name=stationData.get("name"),
+                slug=stationData.get("normalizedName"),
+                image=stationData.get("imageLink", ""),
+            )
+
+            station.levels = [
+                parseHideoutStationLevel(l, station=station)
+                for l in stationData.get("levels", [])
+            ]
+
+            parsedHideoutStations.append(station)
+
+    return parsedHideoutStations
+
+
 def fetchItems(
     itemQuery: str, byId: bool, limit: int = ITEM_SEARCH_QUERY_RETURN_LIMIT
 ) -> list[Item]:
-    headers = {"Content-Type": "application/json"}
 
     searchKey = "ids" if byId else "names"
 
-    query = f"""
+    itemQuery = f"""
     {{
         items({searchKey}: ["{itemQuery}"], limit: {ITEM_SEARCH_QUERY_RETURN_LIMIT}) {{
             id
@@ -1077,81 +1306,24 @@ def fetchItems(
     }}
     """
 
-    response = requests.post(
-        "https://api.tarkov.dev/graphql", headers=headers, json={"query": query}
-    )
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        item_future = executor.submit(apiFetch, itemQuery)
+        hideout_future = executor.submit(fetchHideoutStations)
 
-    response.raise_for_status()
+        rawItemResponseData = item_future.result()
+        parsedHideoutStations = hideout_future.result()
 
-    rawResponseData = response.json()
+    requiredHideoutItemIDS = {
+        req.item.id
+        for station in parsedHideoutStations
+        for level in station.levels
+        for req in level.itemRequirements
+    }
 
     parsedItems = []
 
-    def parseSimplePrice(amount):
-        if amount is None:
-            return None
-
-        return ItemPrice(price=amount, priceRUB=amount)
-
-    def parseOffer(offerData):
-        return ItemOffer(
-            vendor=Vendor(
-                name=offerData["vendor"]["name"],
-                slug=offerData["vendor"]["normalizedName"],
-            ),
-            price=ItemPrice(
-                currency=next(
-                    filter(
-                        lambda c: c["shortName"] == offerData["currency"],
-                        constants.CURRENCIES,
-                    )
-                ),
-                price=offerData["price"],
-                priceRUB=offerData["priceRUB"],
-            ),
-        )
-
-    def parseCategory(category):
-        return ItemCategory(
-            id=category["id"],
-            name=str(category.get("name", "")).title(),
-            slug=category.get("normalizedName", ""),
-        )
-
-    def parseTrader(traderData):
-        return Trader(
-            name=traderData["name"],
-            description=traderData.get("description", ""),
-            image=traderData.get("image4xLink", ""),
-        )
-
-    def parseNestedItem(wrapper):
-        i = wrapper["item"]
-
-        item = SmallItem(
-            id=i["id"],
-            name=i["name"],
-            shortName=i["shortName"],
-            slug=i["normalizedName"],
-            description=i.get("description", ""),
-            weight=i.get("weight", ""),
-            width=i.get("width", ""),
-            height=i.get("height", ""),
-            itemImage=i["image512pxLink"],
-            inspectImage=i["inspectImageLink"],
-            gridImage=i["gridImageLink"],
-            wikiLink=i.get("wikiLink", ""),
-            apiLink=i.get("link", ""),
-        )
-
-        return ContainedItem(
-            item=item,
-            count=wrapper.get("count", 0),
-            quantity=wrapper.get("quantity", 0),
-        )
-
-    if "data" in rawResponseData and "items" in rawResponseData["data"]:
-        for itemData in rawResponseData["data"]["items"]:
+    if "data" in rawItemResponseData and "items" in rawItemResponseData["data"]:
+        for itemData in rawItemResponseData["data"]["items"]:
 
             categories = [parseCategory(c) for c in itemData.get("categories", [])]
 
@@ -1310,7 +1482,15 @@ def fetchItems(
                 bartersUsing=bartersUsing,
                 craftsFor=craftsFor,
                 craftsUsing=craftsUsing,
+                hideoutUpgradesUsing=None,
             )
+
+            itemObj.hideoutUpgradesUsing = [
+                level
+                for station in parsedHideoutStations
+                for level in station.levels
+                if any(req.item.id == itemObj.id for req in level.itemRequirements)
+            ]
 
             parsedItems.append(itemObj)
 
