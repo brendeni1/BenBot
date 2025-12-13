@@ -204,7 +204,7 @@ class HideoutStationLevel:
         except StopIteration:
             pass
 
-        return f"•{f" *(x{quantity})*" if quantity else ""} Level {self.level} *({dates.formatSeconds(self.constructionTime) if self.constructionTime else "Instant"})*"
+        return f"•{f" *(x{quantity:,})*" if quantity else ""} Level {self.level} *({dates.formatSeconds(self.constructionTime) if self.constructionTime else "Instant"})*"
 
     def __str__(self):
         return f"• Level {self.level} *({dates.formatSeconds(self.constructionTime) if self.constructionTime else "Instant"})*"
