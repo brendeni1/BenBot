@@ -430,9 +430,11 @@ class Item:
 
         # ITEM DETAIL EMBED
 
+        baseUrl = self.wikiLink if self.wikiLink else "https://tarkov.dev/"
+
         itemDetailEmbed = TarkovEmbedReply(
             title=f"Details - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
-            url=self.wikiLink,
+            url=baseUrl,
             description=f"{text.truncateString(self.getDescription(), 2048)[0]}\n\n*(Data updated {dates.formatSimpleDate(self.lastUpdate, discordDateFormat="R") if self.lastUpdate else "<Unknown>"})*",
         )
 
@@ -450,7 +452,7 @@ class Item:
 
         itemDetailEmbed.add_field(
             name="Item Links",
-            value=f"[Wiki Link]({self.wikiLink})\n[API Link]({self.apiLink})",
+            value=f"[Wiki Link]({baseUrl})\n[API Link]({self.apiLink})",
         )
 
         itemDetailEmbed.add_field(
@@ -491,7 +493,7 @@ class Item:
 
         questDetailEmbed = TarkovEmbedReply(
             title=f"Quests - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
-            url=self.wikiLink + "#Quests",
+            url=baseUrl + "#Quests",
         )
 
         questDetailEmbed.set_thumbnail(url=self.gridImage)
@@ -547,7 +549,7 @@ class Item:
 
             craftsForDetailEmbed = TarkovEmbedReply(
                 title=f"Crafts Rewarding - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
-                url=self.wikiLink + "#Crafting",
+                url=baseUrl + "#Crafting",
             )
 
             craftsForDetailEmbed.set_thumbnail(url=self.gridImage)
@@ -597,7 +599,7 @@ class Item:
 
             craftsUsingDetailEmbed = TarkovEmbedReply(
                 title=f"Crafts Using - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
-                url=self.wikiLink + "#Crafting?discord=broken",
+                url=baseUrl + "#Crafting?discord=broken",
             )
 
             craftsUsingDetailEmbed.set_thumbnail(url=self.gridImage)
@@ -651,7 +653,7 @@ class Item:
 
             bartersForDetailEmbed = TarkovEmbedReply(
                 title=f"Barters Rewarding - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
-                url=self.wikiLink + "#Trading",
+                url=baseUrl + "#Trading",
             )
 
             bartersForDetailEmbed.set_thumbnail(url=self.gridImage)
@@ -700,7 +702,7 @@ class Item:
 
             bartersUsingDetailEmbed = TarkovEmbedReply(
                 title=f"Barters Using - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
-                url=self.wikiLink + "#Trading?discord=broken",
+                url=baseUrl + "#Trading?discord=broken",
             )
 
             bartersUsingDetailEmbed.set_thumbnail(url=self.gridImage)
