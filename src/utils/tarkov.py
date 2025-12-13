@@ -244,12 +244,12 @@ class Craft:
                 quantity = next(
                     filter(lambda i: i.item.id == targetItem.id, self.rewardItems)
                 ).quantity
-                prefix = f"(Makes *x{quantity}*)"
+                prefix = f"(Makes *x{quantity:,}*)"
             except StopIteration:
                 pass
 
         elif not includeRewards and len(self.rewardItems) > 0:
-            prefix = f"(x{self.rewardItems[0].quantity})"
+            prefix = f"(x{self.rewardItems[0].quantity:,})"
 
         # If we are hiding the level (grouping), move the prefix to the body
         # Otherwise, keep it in the header
@@ -307,12 +307,12 @@ class Barter:
                 quantity = next(
                     filter(lambda i: i.item.id == targetItem.id, self.rewardItems)
                 ).quantity
-                prefix = f"(Gives *x{quantity}*)"
+                prefix = f"(Gives *x{quantity:,}*)"
             except StopIteration:
                 pass
 
         elif not includeRewards and len(self.rewardItems) > 0:
-            prefix = f"(x{self.rewardItems[0].quantity})"
+            prefix = f"(x{self.rewardItems[0].quantity:,})"
 
         # If we are hiding the level (grouping), move the prefix to the body
         # Otherwise, keep it in the header
@@ -881,7 +881,7 @@ class ContainedItem:
         self.quantity = quantity
 
     def __str__(self):
-        return f"{self.item.shortName} (*x{self.quantity}*)"
+        return f"{self.item.shortName} (*x{self.quantity:,}*)"
 
 
 def apiFetch(query: str) -> dict:
