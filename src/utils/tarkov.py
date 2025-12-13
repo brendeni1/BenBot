@@ -192,6 +192,20 @@ class HideoutStationLevel:
         else:
             return self.description
 
+    def formatLevelWithTarget(self, targetItem) -> str:
+        quantity = None
+
+        try:
+            matchingItem: ContainedItem = next(
+                filter(lambda i: i.item.id == targetItem.id, self.itemRequirements)
+            )
+
+            quantity = matchingItem.quantity
+        except StopIteration:
+            pass
+
+        return f"•{f" *(x{quantity})*" if quantity else ""} Level {self.level} *({dates.formatSeconds(self.constructionTime) if self.constructionTime else "Instant"})*"
+
     def __str__(self):
         return f"• Level {self.level} *({dates.formatSeconds(self.constructionTime) if self.constructionTime else "Instant"})*"
 
@@ -574,7 +588,7 @@ class Item:
 
         hideoutDetailEmbed.set_thumbnail(url=self.gridImage)
 
-        levelsByStation: dict[str, list] = {}
+        levelsByStation: dict[str, list[HideoutStationLevel]] = {}
 
         for level in self.hideoutUpgradesUsing:
 
@@ -590,7 +604,11 @@ class Item:
                 name=station,
                 value="\n".join(
                     text.truncateList(
-                        [str(l) for l in levelsByStation[station]], limit=1024
+                        [
+                            l.formatLevelWithTarget(self)
+                            for l in levelsByStation[station]
+                        ],
+                        limit=1024,
                     )
                 ),
             )
