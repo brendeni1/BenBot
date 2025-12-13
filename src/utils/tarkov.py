@@ -12,6 +12,80 @@ ITEM_SEARCH_QUERY_RETURN_LIMIT = 10
 
 DEFAULT_CURRENCY = "RUB"
 
+ITEM_DETAIL_REPLY_TIMEOUT_MINS = 14 * 60
+
+
+class ItemSelect(discord.ui.Select):
+    """
+    A Select menu that allows the user to choose one of the fetched items.
+    """
+
+    def __init__(self, items: list["Item"], initial_index: int):
+        options = []
+        for i, item in enumerate(items):
+            # The 'value' will store the index of the item in the list
+            options.append(
+                discord.SelectOption(
+                    label=text.truncateString(item.name.title(), 100)[0],
+                    description=text.truncateString(item.getDescription(), 100)[0],
+                    value=str(i),
+                    default=(i == initial_index),
+                )
+            )
+
+        super().__init__(
+            placeholder="Choose an item...",
+            options=options,
+        )
+        self.items = items
+
+    async def callback(self, interaction: discord.Interaction):
+        # The selected value is the string index of the chosen item
+        selected_index = int(self.values[0])
+        selected_item = self.items[selected_index]
+
+        # Re-generate the embeds for the selected item
+        # We include crafts and barters for a complete display
+        new_embeds = selected_item.toEmbeds(
+            includeCrafts=self.view.includeCrafts,
+            includeBarters=self.view.includeBarters,
+        )
+
+        # Recreate the view to update the selected default option
+        new_view = ItemView(
+            self.items,
+            selected_index,
+            includeCrafts=self.view.includeCrafts,
+            includeBarters=self.view.includeBarters,
+        )
+
+        self.view.stop()
+
+        # Edit the original message to display the new item's details
+        await interaction.response.edit_message(embeds=new_embeds, view=new_view)
+
+
+class ItemView(discord.ui.View):
+    """
+    A View to hold the ItemSelect menu.
+    """
+
+    def __init__(
+        self,
+        items: list["Item"],
+        initial_index: int,
+        includeCrafts: bool,
+        includeBarters: bool,
+    ):
+        super().__init__(
+            timeout=ITEM_DETAIL_REPLY_TIMEOUT_MINS, disable_on_timeout=True
+        )
+
+        self.includeCrafts = includeCrafts
+        self.includeBarters = includeBarters
+
+        self.add_item(ItemSelect(items, initial_index))
+
 
 class TarkovEmbedReply(EmbedReply):
     def __init__(self, title, error=False, *, url=None, description=None):
@@ -58,11 +132,17 @@ class Vendor:
         self.name = name
         self.slug = slug
 
+    def __str__(self):
+        return self.name.title()
+
 
 class ItemOffer:
     def __init__(self, *, vendor: Vendor, price: ItemPrice):
         self.vendor = vendor
         self.price = price
+
+    def __str__(self):
+        return f"• {self.vendor} for {self.price}"
 
 
 class HideoutStation:
@@ -81,6 +161,9 @@ class HideoutStation:
         self.image = image
         self.crafts = crafts if crafts is not None else []
 
+    def __str__(self):
+        return self.name.title()
+
 
 class Craft:
     def __init__(
@@ -90,8 +173,8 @@ class Craft:
         station: HideoutStation,
         level: int,
         duration: int,
-        requiredItems: list["SmallItem"],
-        rewardItems: list["SmallItem"],
+        requiredItems: list["ContainedItem"],
+        rewardItems: list["ContainedItem"],
     ):
         self.id = id
         self.station = station
@@ -99,6 +182,51 @@ class Craft:
         self.duration = duration
         self.requiredItems = requiredItems
         self.rewardItems = rewardItems
+
+    def formatCraft(
+        self,
+        targetItem,
+        includeRewards: bool = True,
+        isReward: bool = False,
+        showLevel: bool = True,
+    ) -> str:
+        prefix = ""
+        duration = dates.formatSeconds(self.duration)
+
+        # Determine if there is a quantity multiplier to show (e.g. x60 ammo)
+        if isReward:
+            try:
+                quantity = next(
+                    filter(lambda i: i.item.id == targetItem.id, self.rewardItems)
+                ).quantity
+                prefix = f"(Makes *x{quantity}*)"
+            except StopIteration:
+                pass
+
+        elif not includeRewards and len(self.rewardItems) > 0:
+            prefix = f"(x{self.rewardItems[0].quantity})"
+
+        # If we are hiding the level (grouping), move the prefix to the body
+        # Otherwise, keep it in the header
+        header_prefix = f" {prefix}" if showLevel and prefix else ""
+        body_prefix = f"{prefix} " if not showLevel and prefix else ""
+
+        if showLevel:
+            base = f"• **Level {self.level}{header_prefix}**\n> {body_prefix}Required Items: {", ".join(str(i) for i in self.requiredItems)}"
+        else:
+            base = f"> {body_prefix}Required Items: {", ".join(str(i) for i in self.requiredItems)}"
+
+        if includeRewards:
+            rewardStr = (
+                f"\n> Reward Items: {", ".join(str(i) for i in self.rewardItems)}"
+            )
+            return (
+                base
+                + rewardStr
+                + f"\n{constants.UNICODE_WHITESPACE["4"]}*(Takes {duration})*"
+            )
+        else:
+            return base + f"\n{constants.UNICODE_WHITESPACE["4"]}*(Takes {duration})*"
 
 
 class Barter:
@@ -108,8 +236,8 @@ class Barter:
         id: str,
         trader: "Trader",
         level: int,
-        requiredItems: list["SmallItem"],
-        rewardItems: list["SmallItem"],
+        requiredItems: list["ContainedItem"],
+        rewardItems: list["ContainedItem"],
         buyLimit: int,
     ):
         self.id = id
@@ -118,6 +246,52 @@ class Barter:
         self.requiredItems = requiredItems
         self.rewardItems = rewardItems
         self.buyLimit = buyLimit
+
+    def formatBarter(
+        self,
+        targetItem,
+        includeRewards: bool = True,
+        isReward: bool = False,
+        showLevel: bool = True,
+    ) -> str:
+        prefix = ""
+
+        # Determine if there is a quantity multiplier to show (e.g. x60 ammo)
+        if isReward:
+            try:
+                quantity = next(
+                    filter(lambda i: i.item.id == targetItem.id, self.rewardItems)
+                ).quantity
+                prefix = f"(Gives *x{quantity}*)"
+            except StopIteration:
+                pass
+
+        elif not includeRewards and len(self.rewardItems) > 0:
+            prefix = f"(x{self.rewardItems[0].quantity})"
+
+        # If we are hiding the level (grouping), move the prefix to the body
+        # Otherwise, keep it in the header
+        header_prefix = f" {prefix}" if showLevel and prefix else ""
+        body_prefix = f"{prefix} " if not showLevel and prefix else ""
+
+        if showLevel:
+            base = f"• **Level {self.level}{header_prefix}**\n> {body_prefix}Required Items: {", ".join(str(i) for i in self.requiredItems)}"
+        else:
+            base = f"> {body_prefix}Required Items: {", ".join(str(i) for i in self.requiredItems)}"
+
+        if includeRewards:
+            rewardStr = (
+                f"\n> Reward Items: {", ".join(str(i) for i in self.rewardItems)}"
+            )
+            return (
+                base
+                + rewardStr
+                + f"\n{constants.UNICODE_WHITESPACE["4"]}*(Limit {self.buyLimit})*"
+            )
+        else:
+            return (
+                base + f"\n{constants.UNICODE_WHITESPACE["4"]}*(Limit {self.buyLimit})*"
+            )
 
 
 class Trader:
@@ -128,6 +302,9 @@ class Trader:
         self.description = description
         self.image = image
         self.barters = barters if barters is not None else []
+
+    def __str__(self):
+        return self.name.title()
 
 
 class ItemCategory:
@@ -149,6 +326,7 @@ class SmallTask:
         experience: int,
         wikiLink: str,
         image: str,
+        minPlayerLevel: int,
     ):
         self.id = id
         self.name = name
@@ -158,6 +336,12 @@ class SmallTask:
         self.experience = experience
         self.wikiLink = wikiLink
         self.image = image
+        self.minPlayerLevel = minPlayerLevel
+
+    def __str__(self):
+        return (
+            f"• {self.trader.name.title()} > {self.name.title()} ({self.map.title()})"
+        )
 
 
 class Item:
@@ -239,51 +423,326 @@ class Item:
         else:
             return self.description
 
-    def toEmbed(self) -> TarkovEmbedReply:
-        embed = TarkovEmbedReply(
-            title=f"{text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
+    def toEmbeds(
+        self, includeCrafts: bool, includeBarters: bool
+    ) -> list[TarkovEmbedReply]:
+        embeds = []
+
+        # ITEM DETAIL EMBED
+
+        itemDetailEmbed = TarkovEmbedReply(
+            title=f"Details - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
             url=self.wikiLink,
             description=f"{text.truncateString(self.getDescription(), 2048)[0]}\n\n*(Data updated {dates.formatSimpleDate(self.lastUpdate, discordDateFormat="R") if self.lastUpdate else "<Unknown>"})*",
         )
 
-        embed.set_thumbnail(url=self.gridImage)
+        itemDetailEmbed.set_thumbnail(url=self.gridImage)
 
-        embed.add_field(
+        itemDetailEmbed.add_field(
             name="Item Category",
             value=" > ".join([category.name for category in self.categories[::-1]]),
         )
 
-        embed.add_field(
-            name="Item Dimensions (W x H)",
+        itemDetailEmbed.add_field(
+            name="Item Size (W x H)",
             value=f"{self.width}x{self.height} ({self.weight} kg)",
         )
 
-        embed.add_field(
+        itemDetailEmbed.add_field(
             name="Item Links",
             value=f"[Wiki Link]({self.wikiLink})\n[API Link]({self.apiLink})",
         )
 
-        embed.add_field(
+        itemDetailEmbed.add_field(
             name="Item Base Price",
             value=str(self.basePrice),
         )
 
-        embed.add_field(
+        itemDetailEmbed.add_field(
             name="Item 24h Price",
             value=f"Avg: {str(self.avg24hPrice)}\n(Low: {str(self.low24hPrice)} High: {str(self.high24hPrice)})",
         )
 
-        embed.add_field(
+        itemDetailEmbed.add_field(
             name="Item 48h Change",
-            value=f"{str(self.change48hPrice) if self.change48hPrice else "(No Data)"} ({"-" if  self.change48hPrice and self.change48hPrice < 0 else "+" if self.change48hPrice and self.change48hPrice > 0 else "" + str(self.change48hPercent) if self.change48hPrice and self.change48hPercent else "N/A"})",
+            value=f"{str(self.change48hPrice) if self.change48hPrice else "(No Data)"} ({"- " if self.change48hPrice and self.change48hPrice < 0 else "+ " if self.change48hPrice and self.change48hPrice > 0 else "" + str(self.change48hPercent) + "%" if self.change48hPrice and self.change48hPercent else "N/A"})",
         )
 
-        embed.set_footer(
+        itemDetailEmbed.add_field(
+            name="Buy Item From",
+            value="\n".join(text.truncateList([str(o) for o in self.buys], 1024))
+            or "*(Not Buyable)*",
+        )
+
+        itemDetailEmbed.add_field(
+            name="Sell Item To",
+            value="\n".join(text.truncateList([str(o) for o in self.sells], 1024))
+            or "*(Not Sellable)*",
+        )
+
+        itemDetailEmbed.set_footer(
             text=f"Item data provided by tarkov.dev · Item ID: {self.id}",
             icon_url="https://tarkov.dev/apple-touch-icon.png",
         )
 
-        return embed
+        embeds.append(itemDetailEmbed)
+
+        # QUEST EMBED
+
+        questDetailEmbed = TarkovEmbedReply(
+            title=f"Quests - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
+            url=self.wikiLink + "#Quests",
+        )
+
+        questDetailEmbed.set_thumbnail(url=self.gridImage)
+
+        questDetailEmbed.add_field(
+            name="Quests Needing Item",
+            value=(
+                "\n".join(
+                    text.truncateList(
+                        [f"[{t}]({t.wikiLink}) 🔗↗️" for t in self.tasksUsed], 1024
+                    )
+                )
+                if self.tasksUsed
+                else "*(No Tasks)*"
+            ),
+        )
+
+        questDetailEmbed.add_field(
+            name="Quests Rewarding Item",
+            value=(
+                "\n".join(
+                    text.truncateList(
+                        [f"[{t}]({t.wikiLink}) 🔗↗️" for t in self.tasksRecieved], 1024
+                    )
+                )
+                if self.tasksRecieved
+                else "*(No Tasks)*"
+            ),
+        )
+
+        questDetailEmbed.set_footer(
+            text=f"Quest data provided by tarkov.dev · Item ID: {self.id}",
+            icon_url="https://tarkov.dev/apple-touch-icon.png",
+        )
+
+        embeds.append(questDetailEmbed)
+
+        # CRAFTS EMBEDS
+
+        if includeCrafts:
+            # Structure: { "StationName": { level_int: [Craft, Craft] } }
+            craftsForByStation = {}
+
+            for craft in self.craftsFor:
+                name = craft.station.name.title()
+                if name not in craftsForByStation:
+                    craftsForByStation[name] = {}
+
+                if craft.level not in craftsForByStation[name]:
+                    craftsForByStation[name][craft.level] = []
+
+                craftsForByStation[name][craft.level].append(craft)
+
+            craftsForDetailEmbed = TarkovEmbedReply(
+                title=f"Crafts Rewarding - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
+                url=self.wikiLink + "#Crafting",
+            )
+
+            craftsForDetailEmbed.set_thumbnail(url=self.gridImage)
+
+            if craftsForByStation:
+                for stationName, levelsData in craftsForByStation.items():
+                    lines = []
+                    sortedLevels = sorted(levelsData.keys())
+
+                    for level in sortedLevels:
+                        lines.append(f"• Level {level}")
+                        for craft in levelsData[level]:
+                            lines.append(
+                                craft.formatCraft(
+                                    targetItem=self,
+                                    includeRewards=False,
+                                    isReward=True,
+                                    showLevel=False,
+                                )
+                            )
+
+                    craftsForDetailEmbed.add_field(
+                        name=stationName,
+                        value="\n".join(text.truncateList(lines, limit=1024)),
+                        inline=False,
+                    )
+
+                craftsForDetailEmbed.set_footer(
+                    text=f"Crafting data provided by tarkov.dev · Item ID: {self.id}",
+                    icon_url="https://tarkov.dev/apple-touch-icon.png",
+                )
+
+                embeds.append(craftsForDetailEmbed)
+
+            # Structure: { "StationName": { level_int: [Craft, Craft] } }
+            craftsUsingByStation = {}
+
+            for craft in self.craftsUsing:
+                name = craft.station.name.title()
+                if name not in craftsUsingByStation:
+                    craftsUsingByStation[name] = {}
+
+                if craft.level not in craftsUsingByStation[name]:
+                    craftsUsingByStation[name][craft.level] = []
+
+                craftsUsingByStation[name][craft.level].append(craft)
+
+            craftsUsingDetailEmbed = TarkovEmbedReply(
+                title=f"Crafts Using - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
+                url=self.wikiLink + "#Crafting?discord=broken",
+            )
+
+            craftsUsingDetailEmbed.set_thumbnail(url=self.gridImage)
+
+            if craftsUsingByStation:
+                for stationName, levelsData in craftsUsingByStation.items():
+                    # Build list of strings for this station
+                    lines = []
+                    # Sort levels (1, 2, 3...)
+                    sortedLevels = sorted(levelsData.keys())
+
+                    for level in sortedLevels:
+                        lines.append(f"• Level {level}")
+                        for craft in levelsData[level]:
+                            lines.append(
+                                craft.formatCraft(
+                                    targetItem=self,
+                                    includeRewards=True,
+                                    isReward=False,
+                                    showLevel=False,
+                                )
+                            )
+
+                    craftsUsingDetailEmbed.add_field(
+                        name=stationName,
+                        value="\n".join(text.truncateList(lines, limit=1024)),
+                        inline=False,
+                    )
+
+                craftsUsingDetailEmbed.set_footer(
+                    text=f"Crafting data provided by tarkov.dev · Item ID: {self.id}",
+                    icon_url="https://tarkov.dev/apple-touch-icon.png",
+                )
+
+                embeds.append(craftsUsingDetailEmbed)
+
+        # BARTER EMBEDS
+
+        if includeBarters:
+            bartersForByTrader = {}
+
+            for barter in self.bartersFor:
+                name = barter.trader.name.title()
+                if name not in bartersForByTrader:
+                    bartersForByTrader[name] = {}
+
+                if barter.level not in bartersForByTrader[name]:
+                    bartersForByTrader[name][barter.level] = []
+
+                bartersForByTrader[name][barter.level].append(barter)
+
+            bartersForDetailEmbed = TarkovEmbedReply(
+                title=f"Barters Rewarding - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
+                url=self.wikiLink + "#Trading",
+            )
+
+            bartersForDetailEmbed.set_thumbnail(url=self.gridImage)
+
+            if bartersForByTrader:
+                for traderName, levelsData in bartersForByTrader.items():
+                    lines = []
+                    sortedLevels = sorted(levelsData.keys())
+
+                    for level in sortedLevels:
+                        lines.append(f"• Level {level}")
+                        for barter in levelsData[level]:
+                            lines.append(
+                                barter.formatBarter(
+                                    targetItem=self,
+                                    includeRewards=False,
+                                    isReward=True,
+                                    showLevel=False,
+                                )
+                            )
+
+                    bartersForDetailEmbed.add_field(
+                        name=traderName,
+                        value="\n".join(text.truncateList(lines, limit=1024)),
+                        inline=False,
+                    )
+
+                bartersForDetailEmbed.set_footer(
+                    text=f"Barter data provided by tarkov.dev · Item ID: {self.id}",
+                    icon_url="https://tarkov.dev/apple-touch-icon.png",
+                )
+
+                embeds.append(bartersForDetailEmbed)
+
+            bartersUsingByTrader = {}
+
+            for barter in self.bartersUsing:
+                name = barter.trader.name.title()
+                if name not in bartersUsingByTrader:
+                    bartersUsingByTrader[name] = {}
+
+                if barter.level not in bartersUsingByTrader[name]:
+                    bartersUsingByTrader[name][barter.level] = []
+
+                bartersUsingByTrader[name][barter.level].append(barter)
+
+            bartersUsingDetailEmbed = TarkovEmbedReply(
+                title=f"Barters Using - {text.truncateString(self.name.title(), 180)[0]} 🔗↗️",
+                url=self.wikiLink + "#Trading?discord=broken",
+            )
+
+            bartersUsingDetailEmbed.set_thumbnail(url=self.gridImage)
+
+            if bartersUsingByTrader:
+                for traderName, levelsData in bartersUsingByTrader.items():
+                    lines = []
+                    # Sort levels (1, 2, 3...)
+                    sortedLevels = sorted(levelsData.keys())
+
+                    for level in sortedLevels:
+                        lines.append(f"• Level {level}")
+                        for barter in levelsData[level]:
+                            lines.append(
+                                barter.formatBarter(
+                                    targetItem=self,
+                                    includeRewards=True,
+                                    isReward=False,
+                                    showLevel=False,
+                                )
+                            )
+
+                    bartersUsingDetailEmbed.add_field(
+                        name=traderName,
+                        value="\n".join(text.truncateList(lines, limit=1024)),
+                        inline=False,
+                    )
+
+                bartersUsingDetailEmbed.set_footer(
+                    text=f"Barter data provided by tarkov.dev · Item ID: {self.id}",
+                    icon_url="https://tarkov.dev/apple-touch-icon.png",
+                )
+
+                embeds.append(bartersUsingDetailEmbed)
+
+        if not embeds:
+            raise Exception("No details available from API.")
+
+        return embeds
+
+    def __str__(self):
+        return self.name.title()
 
 
 class SmallItem:
@@ -316,6 +775,19 @@ class SmallItem:
         self.inspectImage = inspectImage
         self.wikiLink = wikiLink
         self.apiLink = apiLink
+
+    def __str__(self):
+        return self.name.title()
+
+
+class ContainedItem:
+    def __init__(self, item: SmallItem | Item, count: float, quantity: float):
+        self.item = item
+        self.count = count
+        self.quantity = quantity
+
+    def __str__(self):
+        return f"{self.item.shortName} (*x{self.quantity}*)"
 
 
 def fetchItems(
@@ -386,6 +858,7 @@ def fetchItems(
                 experience
                 wikiLink
                 taskImageLink
+                minPlayerLevel
             }}
             receivedFromTasks {{
                 id
@@ -402,6 +875,7 @@ def fetchItems(
                 experience
                 wikiLink
                 taskImageLink
+                minPlayerLevel
             }}
             bartersFor {{
                 id
@@ -427,6 +901,8 @@ def fetchItems(
                         wikiLink
                         link
                     }}
+                    count
+                    quantity
                 }}
                 rewardItems {{
                     item {{
@@ -444,6 +920,8 @@ def fetchItems(
                         wikiLink
                         link
                     }}
+                    count
+                    quantity
                 }}
                 buyLimit
             }}
@@ -471,6 +949,8 @@ def fetchItems(
                         wikiLink
                         link
                     }}
+                    count
+                    quantity
                 }}
                 rewardItems {{
                     item {{
@@ -488,6 +968,8 @@ def fetchItems(
                         wikiLink
                         link
                     }}
+                    count
+                    quantity
                 }}
                 buyLimit
             }}
@@ -517,6 +999,8 @@ def fetchItems(
                         wikiLink
                         link
                     }}
+                    count
+                    quantity
                 }}
                 rewardItems {{
                     item {{
@@ -534,6 +1018,57 @@ def fetchItems(
                         wikiLink
                         link
                     }}
+                    count
+                    quantity
+                }}
+            }}
+            craftsUsing {{
+                id
+                station {{
+                    id
+                    name
+                    normalizedName
+                    imageLink
+                }}
+                level
+                duration
+                requiredItems {{
+                    item {{
+                        id
+                        name
+                        shortName
+                        normalizedName
+                        description
+                        weight
+                        height
+                        width
+                        image512pxLink
+                        gridImageLink
+                        inspectImageLink
+                        wikiLink
+                        link
+                    }}
+                    count
+                    quantity
+                }}
+                rewardItems {{
+                    item {{
+                        id
+                        name
+                        shortName
+                        normalizedName
+                        description
+                        weight
+                        height
+                        width
+                        image512pxLink
+                        gridImageLink
+                        inspectImageLink
+                        wikiLink
+                        link
+                    }}
+                    count
+                    quantity
                 }}
             }}
         }}
@@ -590,7 +1125,8 @@ def fetchItems(
 
     def parseNestedItem(wrapper):
         i = wrapper["item"]
-        return SmallItem(
+
+        item = SmallItem(
             id=i["id"],
             name=i["name"],
             shortName=i["shortName"],
@@ -606,6 +1142,12 @@ def fetchItems(
             apiLink=i.get("link", ""),
         )
 
+        return ContainedItem(
+            item=item,
+            count=wrapper.get("count", 0),
+            quantity=wrapper.get("quantity", 0),
+        )
+
     if "data" in rawResponseData and "items" in rawResponseData["data"]:
         for itemData in rawResponseData["data"]["items"]:
 
@@ -618,9 +1160,14 @@ def fetchItems(
             changePrice48h = parseSimplePrice(itemData.get("changeLast48h"))
 
             buys = [parseOffer(o) for o in itemData.get("buyFor", [])]
+
+            buys.sort(key=lambda o: o.price.priceRUB, reverse=True)
+
             sells = [parseOffer(o) for o in itemData.get("sellFor", [])]
 
-            tasksUsed = []
+            sells.sort(key=lambda o: o.price.priceRUB, reverse=True)
+
+            tasksUsed: list[SmallTask] = []
             for t in itemData.get("usedInTasks", []):
                 mapName = t["map"]["name"] if t.get("map") else "Any"
                 tasksUsed.append(
@@ -633,10 +1180,13 @@ def fetchItems(
                         experience=t["experience"],
                         wikiLink=t.get("wikiLink", ""),
                         image=t.get("taskImageLink", ""),
+                        minPlayerLevel=t.get("minPlayerLevel", 0),
                     )
                 )
 
-            tasksReceived = []
+            tasksUsed.sort(key=lambda t: t.minPlayerLevel)
+
+            tasksReceived: list[SmallTask] = []
             for t in itemData.get("receivedFromTasks", []):
                 mapName = t["map"]["name"] if t.get("map") else "Any"
                 tasksReceived.append(
@@ -649,8 +1199,11 @@ def fetchItems(
                         experience=t["experience"],
                         wikiLink=t.get("wikiLink", ""),
                         image=t.get("taskImageLink", ""),
+                        minPlayerLevel=t.get("minPlayerLevel", 0),
                     )
                 )
+
+            tasksReceived.sort(key=lambda t: t.minPlayerLevel)
 
             bartersFor = []
             for b in itemData.get("bartersFor", []):
@@ -698,6 +1251,26 @@ def fetchItems(
                     )
                 )
 
+            craftsUsing = []
+            for c in itemData.get("craftsUsing", []):
+                stationData = c["station"]
+                station = HideoutStation(
+                    id=stationData["id"],
+                    name=stationData["name"],
+                    slug=stationData["normalizedName"],
+                    image=stationData["imageLink"],
+                )
+                craftsUsing.append(
+                    Craft(
+                        id=c["id"],
+                        station=station,
+                        level=c["level"],
+                        duration=c["duration"],
+                        requiredItems=[parseNestedItem(x) for x in c["requiredItems"]],
+                        rewardItems=[parseNestedItem(x) for x in c["rewardItems"]],
+                    )
+                )
+
             lastUpdateStr = itemData.get("updated")
             lastUpdate = (
                 dates.simpleDateObj(lastUpdateStr)
@@ -734,7 +1307,7 @@ def fetchItems(
                 bartersFor=bartersFor,
                 bartersUsing=bartersUsing,
                 craftsFor=craftsFor,
-                craftsUsing=[],
+                craftsUsing=craftsUsing,
             )
 
             parsedItems.append(itemObj)

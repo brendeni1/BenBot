@@ -30,7 +30,7 @@ class TarkovItemCommands(commands.Cog):
         description="Search for an item by name or tarkov.dev ID.",
         guild_ids=[799341195109203998],
     )
-    async def search(self, ctx: discord.ApplicationContext, query: discord.Option(str, description="An in-game item to search for.", required=True), by_id: discord.Option(bool, description="Whether the item provided is an ID. (Must be a tarkov.dev ID)", default=False)):  # type: ignore
+    async def search(self, ctx: discord.ApplicationContext, query: discord.Option(str, description="An in-game item to search for.", required=True), include_crafts: discord.Option(bool, description="Whether to include crafting in the response.", default=False), include_barters: discord.Option(bool, description="Whether to include barters in the response.", default=False), by_id: discord.Option(bool, description="Whether the item provided is an ID. (Must be a tarkov.dev ID)", default=False)):  # type: ignore
         try:
             await ctx.defer()
 
@@ -39,13 +39,22 @@ class TarkovItemCommands(commands.Cog):
             if not relevantItems:
                 raise Exception("No items found for that query!")
 
-            item = relevantItems[0]
+            initialItem = relevantItems[0]
 
-            embed = item.toEmbed()
+            initialEmbeds = initialItem.toEmbeds(
+                includeBarters=include_barters, includeCrafts=include_crafts
+            )
 
-            await embed.send(ctx)
+            itemView = tarkov.ItemView(
+                items=relevantItems,
+                initial_index=0,
+                includeBarters=include_barters,
+                includeCrafts=include_crafts,
+            )
+
+            await ctx.followup.send(embeds=initialEmbeds, view=itemView)
         except Exception as e:
-            raise e
+            # raise e
             reply = EmbedReply(
                 "Tarkov - Item Search - Error",
                 "tarkov",

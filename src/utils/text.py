@@ -98,3 +98,52 @@ def fuzzySearch(
     )
 
     return results
+
+
+def truncateList(
+    inputList: list[str], limit: int, addRestLength: bool = True
+) -> list[str]:
+    """
+    Truncates a list of strings so that joining them with newlines stays within 'limit'.
+    If truncation occurs and addRestLength is True, appends '... and X more...'.
+    """
+    currentLength = 0
+    truncatedResult = []
+
+    # 1 is the length of the newline character "\n" used for joining later
+    separatorLength = 1
+
+    for i, item in enumerate(inputList):
+        # Calculate cost of adding this item (add separator cost only if not the first item)
+        itemCost = len(item) + (separatorLength if i > 0 else 0)
+
+        # Check if adding this item exceeds the limit
+        if currentLength + itemCost > limit:
+            remainingCount = len(inputList) - i
+
+            if addRestLength:
+                suffix = f"... and {remainingCount} more..."
+                suffixCost = len(suffix) + separatorLength
+
+                # If adding the suffix exceeds limit, remove previous items until it fits
+                while truncatedResult and (currentLength + suffixCost > limit):
+                    removedItem = truncatedResult.pop()
+                    # Determine cost of the removed item (was it the first?)
+                    removedCost = len(removedItem) + (
+                        separatorLength if truncatedResult else 0
+                    )
+                    currentLength -= removedCost
+                    remainingCount += 1
+
+                    # Update suffix with new count
+                    suffix = f"... and {remainingCount} more..."
+                    suffixCost = len(suffix) + separatorLength
+
+                truncatedResult.append(suffix)
+
+            return truncatedResult
+
+        truncatedResult.append(item)
+        currentLength += itemCost
+
+    return truncatedResult
