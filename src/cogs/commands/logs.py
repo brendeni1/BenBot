@@ -1,28 +1,73 @@
 import discord
 import sys
 from discord.ext import commands
+from src.utils.logging import messageLogs
 
 from src.classes import *
 
 
-class MyCog(commands.Cog):
+class LogCommands(commands.Cog):
     ISCOG = True
 
     def __init__(self, bot):
         self.bot: discord.Bot = bot
 
-        self.description = "Template for cogs."
+        self.description = "Commands for log entries."
 
-    @discord.slash_command(
-        description="Template for commands.", guild_ids=[799341195109203998]
+    logCommands = discord.SlashCommandGroup(
+        name="logs",
+        description="Commands for log entries.",
+        guild_ids=[799341195109203998],
     )
-    async def command(self, ctx: discord.ApplicationContext):
+
+    messageLogCommands = logCommands.create_subgroup(
+        name="messages",
+        description="Commands for logged messages.",
+        guild_ids=[799341195109203998],
+    )
+
+    @messageLogCommands.command(
+        description="View a logged message by Discord ID.",
+        guild_ids=[799341195109203998],
+    )
+    async def view(
+        self,
+        ctx: discord.ApplicationContext,
+        id: discord.Option(str, description="Discord ID of message."),  # type: ignore
+        is_entry_id: discord.Option(
+            bool,
+            description="Whether the ID should be looked up by BenBot's entry ID instead of Discord's.",
+            default=False,
+        ),  # type: ignore
+    ):
         await ctx.defer()
 
         try:
-            pass
+            database = LocalDatabase(database="logs")
+
+            targetColumn = "entryID" if is_entry_id else "discordMessageID"
+
+            sql = f"SELECT * FROM messages WHERE {targetColumn} = ?"
+
+            params = (id,)
+
+            result = database.get(sql, params, limit=1)
+
+            if not result:
+                raise Exception(
+                    "That `{targetColumn}` ID was not found in the database.\n\n*(Hint: BenBot started logging messages on <t:1765771188:D>)*"
+                )
+
+            resultObj = messageLogs.dbResultToLogEntry(result[0])
+
+            reply = resultObj.toEmbed()
+
+            await reply.send(ctx)
         except Exception as e:
-            reply = EmbedReply(" -  - Error", "", error=True, description=f"Error: {e}")
+            # raise e
+            reply = EmbedReply(
+                "Logs - Messages - Error", "", error=True, description=f"Error: {e}"
+            )
 
             await reply.send(ctx)
 

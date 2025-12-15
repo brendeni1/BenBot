@@ -1,6 +1,6 @@
 import discord
 from src.utils import music
-from src.cogs import antiben
+from src.cogs.commands import antiben
 
 
 class Bot(discord.Bot):

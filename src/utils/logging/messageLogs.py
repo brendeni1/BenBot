@@ -100,6 +100,12 @@ def messageToLogEntryObj(message: discord.Message) -> logClasses.MessageLogEntry
     if message.call:
         messageTypes.append("call")
 
+    if message.tts:
+        messageTypes.append("tts")
+
+    if message.components:
+        messageTypes.append("components")
+
     for attachment in message.attachments:
         smallAttachmentObj = attachmentToSmallAttachmentObj(attachment)
 
@@ -126,3 +132,90 @@ def messageToLogEntryObj(message: discord.Message) -> logClasses.MessageLogEntry
     )
 
     return logEntryObj
+
+
+def dbResultToLogEntry(
+    dbResult: tuple,
+    columnOrder: list[str] = [
+        "entryID",
+        "discordMessageID",
+        "timestamp",
+        "messageTypes",
+        "guildID",
+        "guildName",
+        "channelID",
+        "channelName",
+        "userID",
+        "userName",
+        "userNickname",
+        "content",
+        "systemContent",
+        "attachments",
+        "isBot",
+        "wordCount",
+    ],
+) -> logClasses.MessageLogEntry:
+    """
+    Converts a single database row result (tuple) back into a MessageLogEntry object.
+
+    :param dbResult: A tuple representing one row from the 'messages' SQL table.
+    :param columnOrder: The order of columns in the SQL query result.
+    :return: A fully instantiated MessageLogEntry object.
+    """
+
+    # Map the result tuple to column names for easy access
+    data = dict(zip(columnOrder, dbResult))
+
+    # --- Deserialization/Parsing Steps ---
+
+    # 1. Deserialize timestamp (string -> datetime)
+    # The string format is 'YYYY-MM-DD HH:MM:SS', which formatSimpleDate's reverse should handle.
+    timestamp_obj = dates.simpleDateObj(data["timestamp"])
+
+    try:
+        rawMessageTypes: str = data["messageTypes"]
+
+        message_types_list = rawMessageTypes.split(",")
+    except:
+        # Fallback if the string is empty or invalid
+        message_types_list = []
+
+    # 3. Deserialize attachments (BLOB/bytes -> list[SmallDiscordAttachment])
+    attachments_blob = data["attachments"]
+    attachments_list = None
+    if attachments_blob is not None:
+        try:
+            # Use pickle.loads to convert the byte string back to the object list
+            attachments_list = pickle.loads(attachments_blob)
+        except pickle.UnpicklingError:
+            # Handle case where the BLOB is corrupted or not a valid pickle stream
+            print(
+                f"Warning: Could not unpickle attachments for message {data['entryID']}"
+            )
+            attachments_list = None
+
+    # --- Instantiate MessageLogEntry ---
+
+    entry = logClasses.MessageLogEntry(
+        customID=data["entryID"],
+        customTimestamp=timestamp_obj,
+        discordMessageID=data["discordMessageID"],
+        messageTypes=message_types_list,
+        guildName=data["guildName"],
+        channelID=data["channelID"],
+        channelName=data["channelName"],
+        userID=data["userID"],
+        userName=data["userName"],
+        isBot=bool(
+            data["isBot"]
+        ),  # Ensure boolean is correctly parsed from DB int/bool type
+        wordCount=data["wordCount"],
+        # Optional fields
+        guildID=data["guildID"],
+        userNickname=data["userNickname"],
+        content=data["content"],
+        systemContent=data["systemContent"],
+        attachments=attachments_list,
+    )
+
+    return entry

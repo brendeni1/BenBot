@@ -1,10 +1,43 @@
+import discord
 import datetime
 import pickle
 
 from src.utils import text
 from src.utils import dates
 
-from src.classes import LocalDatabase
+from src.classes import LocalDatabase, EmbedReply
+
+
+class MessageLogEmbedReply(EmbedReply):
+    def __init__(
+        self,
+        entry: "MessageLogEntry",
+        title=None,
+        commandName="logs",
+        error=False,
+        *,
+        url=None,
+        description=None,
+    ):
+        super().__init__(
+            title
+            or text.truncateString(
+                f"{entry.userName}'s message in {entry.guildName} > {entry.channelName}",
+                253,
+            )[0],
+            commandName,
+            error,
+            url=url,
+            description=description,
+        )
+
+        if entry.guildID and entry.channelID and entry.discordMessageID:
+            self.url = f"https://discord.com/channels/{entry.guildID}/{entry.channelID}/{entry.discordMessageID}"
+            self.title += " 🔗↗️"
+
+        self.set_footer(
+            text=f"Entry ID: {entry.id} Discord Message ID: {entry.discordMessageID}"
+        )
 
 
 class LogEntry:
@@ -79,6 +112,9 @@ class SmallDiscordAttachment:
 
         return serialized
 
+    def __str__(self):
+        return f"• {self.fileName} ({text.formatBytes(self.sizeBytes)})"
+
 
 class MessageLogEntry(LogEntry):
     """
@@ -144,7 +180,7 @@ class MessageLogEntry(LogEntry):
             self.id,
             self.discordMessageID,
             dates.formatSimpleDate(self.timestamp, databaseDate=True),
-            str(self.messageTypes),
+            ",".join(self.messageTypes),
             self.guildID,
             self.guildName,
             self.channelID,
@@ -160,3 +196,64 @@ class MessageLogEntry(LogEntry):
         )
 
         database.setOne(sql, params)
+
+    def toEmbed(self) -> MessageLogEmbedReply:
+        reply = MessageLogEmbedReply(entry=self)
+
+        reply.description = (
+            "**Message Content:**\n\n"
+            + text.truncateString(
+                self.content or "*(Message Has No Words)*",
+                4000,
+            )[0]
+        )
+
+        nameString = (
+            f"{self.userNickname} *AKA @{self.userName}*"
+            if self.userNickname
+            else f"@{self.userName}"
+        )
+
+        reply.add_field(
+            name="Message Sent By",
+            value=f"<@{self.userID}>\n> (In DB As: {nameString})",
+        )
+
+        reply.add_field(
+            name="Message Sent On",
+            value=dates.formatSimpleDate(self.timestamp, discordDateFormat="F"),
+        )
+
+        reply.add_field(
+            name="Message Word Count",
+            value=f"{self.wordCount} word(s).",
+        )
+
+        reply.add_field(
+            name="Message Content Types",
+            value=(
+                "\n".join([f"• {t}" for t in self.messageTypes])
+                if self.messageTypes
+                else "*(No Message Types Defined)*"
+            ),
+        )
+
+        reply.add_field(
+            name="Message Attachments",
+            value=(
+                "\n".join(
+                    text.truncateList(
+                        [
+                            f"[{attachment}]({attachment.link}) 🔗↗️"
+                            for attachment in self.attachments
+                        ],
+                        1024,
+                    )
+                )
+                if self.attachments
+                else "*(No Attachments)*"
+            ),
+            inline=False,
+        )
+
+        return reply

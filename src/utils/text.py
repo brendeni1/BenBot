@@ -147,3 +147,23 @@ def truncateList(
         currentLength += itemCost
 
     return truncatedResult
+
+
+def formatBytes(amount: int) -> str:
+    """
+    Translates bytes to the most suitable unit (KB, MB, GB, etc.).
+    Uses the binary (base 1024) system.
+    """
+    if amount == 0:
+        return "0 Bytes"
+
+    units = ["Bytes", "KB", "MB", "GB", "TB", "PB"]
+    unit = 1024
+    i = 0
+
+    # Find the correct unit exponent
+    while amount >= unit and i < len(units) - 1:
+        amount /= unit
+        i += 1
+
+    return f"{amount:.1f} {units[i]}"
