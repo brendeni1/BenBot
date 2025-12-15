@@ -4,7 +4,7 @@ from discord.ext import commands
 
 from src.classes import *
 
-from src.utils.logging import commandLogs
+from src.utils.logging import commandLogs, messageLogs
 from src.utils import dates
 
 
@@ -17,10 +17,25 @@ class CommandLogging(commands.Cog):
         self.description = "Command logging cog."
 
     @commands.Cog.listener()
-    async def on_application_command(self, ctx):
+    async def on_application_command(self, ctx: discord.ApplicationContext):
         logEntryObj = commandLogs.contextToLogEntry(ctx)
 
         commandLogs.insertLogEntry(logEntryObj)
+
+
+class MessageLogging(commands.Cog):
+    ISCOG = True
+
+    def __init__(self, bot):
+        self.bot: discord.Bot = bot
+
+        self.description = "Chat message logging cog."
+
+    @commands.Cog.listener()
+    async def on_message(self, msg: discord.Message):
+        logEntryObj = messageLogs.messageToLogEntryObj(msg)
+
+        logEntryObj.writeToDB()
 
 
 def setup(bot):
