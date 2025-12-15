@@ -9,7 +9,7 @@ from src.utils import dates
 from src.utils import images
 from src.utils import text
 
-from src.cogs.albumratings import AlbumRatings
+from src.cogs.commands.albumratings import AlbumRatings
 
 from src.classes import *
 
