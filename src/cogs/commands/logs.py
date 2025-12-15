@@ -33,29 +33,22 @@ class LogCommands(commands.Cog):
     async def view(
         self,
         ctx: discord.ApplicationContext,
-        id: discord.Option(str, description="Discord ID of message."),  # type: ignore
-        is_entry_id: discord.Option(
-            bool,
-            description="Whether the ID should be looked up by BenBot's entry ID instead of Discord's.",
-            default=False,
-        ),  # type: ignore
+        id: discord.Option(str, description="BenBot Entry ID or Discord ID of message."),  # type: ignore
     ):
         await ctx.defer()
 
         try:
             database = LocalDatabase(database="logs")
 
-            targetColumn = "entryID" if is_entry_id else "discordMessageID"
+            sql = f"SELECT * FROM messages WHERE entryID = ? OR discordMessageID = ?"
 
-            sql = f"SELECT * FROM messages WHERE {targetColumn} = ?"
-
-            params = (id,)
+            params = (id, id)
 
             result = database.get(sql, params, limit=1)
 
             if not result:
                 raise Exception(
-                    "That `{targetColumn}` ID was not found in the database.\n\n*(Hint: BenBot started logging messages on <t:1765771188:D>)*"
+                    f"That message ID was not found in the database.\n\n*(Hint: BenBot started logging messages on <t:1765771188:D>)*"
                 )
 
             resultObj = messageLogs.dbResultToLogEntry(result[0])

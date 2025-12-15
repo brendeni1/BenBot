@@ -22,7 +22,7 @@ class MessageLogEmbedReply(EmbedReply):
         super().__init__(
             title
             or text.truncateString(
-                f"{entry.userName}'s message in {entry.guildName} > {entry.channelName}",
+                f"**@{entry.userName}**'s message in *{entry.guildName}* in channel *{entry.channelName}*",
                 253,
             )[0],
             commandName,
@@ -201,11 +201,12 @@ class MessageLogEntry(LogEntry):
         reply = MessageLogEmbedReply(entry=self)
 
         reply.description = (
-            "**Message Content:**\n\n"
-            + text.truncateString(
-                self.content or "*(Message Has No Words)*",
-                4000,
-            )[0]
+            f"**Message Content**: `{text.truncateString(
+            self.content,
+            4000,
+        )[0]}`"
+            if self.content
+            else "*(Message Has No Text)*"
         )
 
         nameString = (
