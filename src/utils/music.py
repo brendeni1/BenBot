@@ -867,7 +867,7 @@ class TrackRatingEmbedReply(EmbedReply):
 
         self.set_author(
             name=track.album.createdBy.global_name,
-            icon_url=track.album.createdBy.avatar.url,
+            icon_url=track.album.createdBy.display_avatar.url,
         )
 
 
@@ -1344,7 +1344,7 @@ class AlbumRatingEmbedReply(EmbedReply):
             self.set_author(
                 name=targetAlbumDetails.createdBy.global_name
                 or targetAlbumDetails.createdBy.name,
-                icon_url=targetAlbumDetails.createdBy.avatar.url,
+                icon_url=targetAlbumDetails.createdBy.display_avatar.url,
             )
 
 
