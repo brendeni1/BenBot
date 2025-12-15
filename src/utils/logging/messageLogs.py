@@ -42,7 +42,9 @@ def attachmentToSmallAttachmentObj(
     return smallAttachmentObj
 
 
-def messageToLogEntryObj(message: discord.Message) -> logClasses.MessageLogEntry:
+def messageToLogEntryObj(
+    message: discord.Message, bot: discord.Bot
+) -> logClasses.MessageLogEntry:
     messageTypes: list[str] = []
     discordMessageID = message.id
     guildID = message.guild.id if message.guild else None
@@ -105,6 +107,9 @@ def messageToLogEntryObj(message: discord.Message) -> logClasses.MessageLogEntry
 
     if message.components:
         messageTypes.append("components")
+
+    if (bot.user.id == message.author.id) and (not content) and (not messageTypes):
+        messageTypes.append("deferred")
 
     for attachment in message.attachments:
         smallAttachmentObj = attachmentToSmallAttachmentObj(attachment)

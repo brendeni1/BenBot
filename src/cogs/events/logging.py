@@ -33,7 +33,7 @@ class MessageLogging(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, msg: discord.Message):
-        logEntryObj = messageLogs.messageToLogEntryObj(msg)
+        logEntryObj = messageLogs.messageToLogEntryObj(msg, self.bot)
 
         logEntryObj.writeToDB()
 
