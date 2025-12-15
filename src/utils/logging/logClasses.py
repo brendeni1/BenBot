@@ -36,7 +36,7 @@ class MessageLogEmbedReply(EmbedReply):
             self.title += " 🔗↗️"
 
         self.set_footer(
-            text=f"Entry ID: {entry.id} Discord Message ID: {entry.discordMessageID}"
+            text=f"Entry ID: {entry.id} • Discord Message ID: {entry.discordMessageID}"
         )
 
 
