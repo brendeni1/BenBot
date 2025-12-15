@@ -173,7 +173,7 @@ def dbResultToLogEntry(
     timestamp_obj = dates.simpleDateObj(data["timestamp"])
 
     try:
-        rawMessageTypes: str = data["messageTypes"]
+        rawMessageTypes = data["messageTypes"]
 
         message_types_list = rawMessageTypes.split(",")
     except:
@@ -193,8 +193,6 @@ def dbResultToLogEntry(
                 f"Warning: Could not unpickle attachments for message {data['entryID']}"
             )
             attachments_list = None
-
-    # --- Instantiate MessageLogEntry ---
 
     entry = logClasses.MessageLogEntry(
         customID=data["entryID"],

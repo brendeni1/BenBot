@@ -180,7 +180,7 @@ class MessageLogEntry(LogEntry):
             self.id,
             self.discordMessageID,
             dates.formatSimpleDate(self.timestamp, databaseDate=True),
-            ",".join(self.messageTypes),
+            ",".join(self.messageTypes) if self.messageTypes else None,
             self.guildID,
             self.guildName,
             self.channelID,
