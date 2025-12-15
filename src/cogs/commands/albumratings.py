@@ -22,6 +22,8 @@ SINGLE_ALBUM_TRACK_CRITERIA = 1
 
 DUPLICATE_RATING_TIMEOUT_DELETEAFTER = 30
 
+TIMEOUT_VIEW_RATINGS_PAGINATOR = 14 * (60)
+
 
 async def paginateRatingList(
     results,
@@ -640,7 +642,7 @@ class AlbumRatings(commands.Cog):
             )
 
             pagignator = pages.Paginator(
-                pages=pageList,
+                pages=pageList, timeout=TIMEOUT_VIEW_RATINGS_PAGINATOR
             )
 
             await pagignator.respond(ctx.interaction)
@@ -712,7 +714,7 @@ class AlbumRatings(commands.Cog):
             )
 
             pagignator = pages.Paginator(
-                pages=pageList,
+                pages=pageList, timeout=TIMEOUT_VIEW_RATINGS_PAGINATOR
             )
 
             await pagignator.respond(ctx.interaction)
@@ -782,7 +784,7 @@ class AlbumRatings(commands.Cog):
             )
 
             pagignator = pages.Paginator(
-                pages=pageList,
+                pages=pageList, timeout=TIMEOUT_VIEW_RATINGS_PAGINATOR
             )
 
             await pagignator.respond(ctx.interaction)
