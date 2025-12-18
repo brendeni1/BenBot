@@ -596,6 +596,8 @@ class DateSelectView(discord.ui.View):
         self.add_item(selectItem)
 
         if film.chain == "Landmark":
+            self.add_item(OpenLink("Get Tickets", link=film.filmURL))
+
             if film.trailerLink:
                 self.add_item(OpenLink("View Movie Trailer", link=film.trailerLink))
             else:
