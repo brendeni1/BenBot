@@ -671,3 +671,32 @@ class DateSelect(discord.ui.Select):
 
         # Edit message but DO NOT replace the view instance
         await interaction.response.edit_message(embed=reply, view=self.view)
+
+
+class SeatMap:
+    def __init__(self):
+        pass
+
+
+class SeatArea:
+    def __init__(self):
+        pass
+
+
+class SeatRow:
+    def __init__(self):
+        pass
+
+
+class SeatGroup:
+    def __init__(self):
+        pass
+
+
+class SeatGroup:
+    def __init__(self):
+        pass
+
+
+def fetchSeatMap(cinemaID: int, sessionID: int):
+    pass
