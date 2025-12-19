@@ -646,6 +646,8 @@ class AlbumRatings(commands.Cog):
             )
 
             await pagignator.respond(ctx.interaction)
+        except discord.NotFound as e:
+            pass
         except Exception as e:
             reply = EmbedReply(
                 "Album Ratings - List By Search",
@@ -718,6 +720,8 @@ class AlbumRatings(commands.Cog):
             )
 
             await pagignator.respond(ctx.interaction)
+        except discord.NotFound as e:
+            pass
         except Exception as e:
             reply = EmbedReply(
                 "Album Ratings - List By Member",
@@ -758,7 +762,7 @@ class AlbumRatings(commands.Cog):
         try:
             database = LocalDatabase()
 
-            sql = f"SELECT * FROM albumRatings WHERE createdBy = ? AND formattedRating != \"Unfinished\""
+            sql = f'SELECT * FROM albumRatings WHERE createdBy = ? AND formattedRating != "Unfinished"'
 
             if not include_singles:
                 sql += f" AND trackAmount > {SINGLE_ALBUM_TRACK_CRITERIA}"
@@ -788,6 +792,8 @@ class AlbumRatings(commands.Cog):
             )
 
             await pagignator.respond(ctx.interaction)
+        except discord.NotFound as e:
+            pass
         except Exception as e:
             reply = EmbedReply(
                 "Album Ratings - List Top",
