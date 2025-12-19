@@ -20,7 +20,9 @@ SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 
 # Timeouts in mins.
 TIMEOUT_TO_PICK_ALBUM = 1 * (60)
-TIMEOUT_FOR_RATING_SELECT = 300 * (60)
+TIMEOUT_FOR_RATING_SELECT = 120 * (
+    60
+)  # This resets every time a rating embed view is interacted with. This is not a total rating timeout, but an inactivity timeout.
 TIMEOUT_FOR_DUPE_RATING_CONFIRMATION = 5 * (60)
 
 FAVOURITE_INDEX_OPTIONS = sorted(
