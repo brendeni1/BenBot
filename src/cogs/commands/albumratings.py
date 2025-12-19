@@ -758,7 +758,7 @@ class AlbumRatings(commands.Cog):
         try:
             database = LocalDatabase()
 
-            sql = f"SELECT * FROM albumRatings WHERE createdBy = ?"
+            sql = f"SELECT * FROM albumRatings WHERE createdBy = ? AND formattedRating != \"Unfinished\""
 
             if not include_singles:
                 sql += f" AND trackAmount > {SINGLE_ALBUM_TRACK_CRITERIA}"

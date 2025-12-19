@@ -693,7 +693,7 @@ class SeatGroup:
         pass
 
 
-class SeatGroup:
+class Seat:
     def __init__(self):
         pass
 
