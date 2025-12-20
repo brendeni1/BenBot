@@ -1,5 +1,5 @@
 import discord
-from src.utils import music
+from src.utils import music, imagesCog
 from src.cogs.commands import antiben
 
 
@@ -12,9 +12,12 @@ class Bot(discord.Bot):
         )
 
         self.add_view(music.FinishedRatingPersistentMessageButtonsView())
-        print("Persistent album rating buttons loaded.")
+        print("Persistent Album Rating buttons loaded.")
 
         self.add_view(antiben.AntiBenMovementView())
         print("Persistent Anti-Ben buttons loaded.")
+
+        self.add_view(imagesCog.ImageView(None))
+        print("Persistent Image buttons loaded.")
 
         print(f"Logged in as {self.user}!")
