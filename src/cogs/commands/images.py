@@ -1,4 +1,5 @@
 import discord
+import random
 import sys
 from discord.ext import commands
 
@@ -275,6 +276,71 @@ class ImageCommands(commands.Cog):
         except Exception as e:
             reply = EmbedReply(
                 "Images - View - Error",
+                "images",
+                error=True,
+                description=f"Error: {e}",
+            )
+            await reply.send(ctx)
+
+    @imageCommands.command(
+        description="Send a persistent view of a random image, optionally with an album.",
+        guild_ids=[799341195109203998],
+    )
+    async def random(
+        self,
+        ctx: discord.ApplicationContext,
+        album: discord.Option(str, description="The album to pull from.", required=False, autocomplete=imagesCog.listAlbums),  # type: ignore
+    ):
+        await ctx.defer()
+
+        try:
+            db = LocalDatabase()
+
+            # Exact match on ID or Link (same logic as Delete)
+            sql = "SELECT * FROM images"
+            params = ()
+
+            if album:
+                sql += " WHERE album LIKE ?"
+                params = (f"%{album}%",)
+
+            results = db.get(sql, params)
+
+            if not results and album:
+                reply = EmbedReply(
+                    "Images - Random - Error",
+                    "images",
+                    error=True,
+                    description=f"No image found in the album: `{album}`",
+                )
+                await reply.send(ctx)
+                return
+            elif not results and not album:
+                reply = EmbedReply(
+                    "Images - Random - Error",
+                    "images",
+                    error=True,
+                    description=f"No images found in the DB!",
+                )
+                await reply.send(ctx)
+                return
+
+            # Convert result to Object
+            imageObj = imagesCog.dbToObj(random.choice(results))
+
+            # Create the standard View
+            # We use ImageView directly (not ImageSearchView) because it defaults to timeout=None
+            # and does not have the select menu complexity.
+            view = imagesCog.ImageView(imageObj)
+
+            # Generate the embed
+            embed = imageObj.toEmbed("Images - Random 🔗↗️")
+
+            await ctx.followup.send(embed=embed, view=view)
+
+        except Exception as e:
+            reply = EmbedReply(
+                "Images - Random - Error",
                 "images",
                 error=True,
                 description=f"Error: {e}",
