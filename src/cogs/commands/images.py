@@ -42,11 +42,25 @@ class ImageCommands(commands.Cog):
         if image_attachment:
             # Send the file to a permanent storage channel
             storage_channel = self.bot.get_channel(constants.STORAGE_CHANNEL_ID)
-            # Re-upload the file to get a "permanent" link
-            permanent_msg = await storage_channel.send(
-                file=await image_attachment.to_file()
-            )
-            link = permanent_msg.attachments[0].url
+
+            try:
+                # Re-upload the file to get a "permanent" link
+                permanent_msg = await storage_channel.send(
+                    file=await image_attachment.to_file()
+                )
+                link = permanent_msg.attachments[0].url
+            except discord.HTTPException as e:
+                if e.status == 413:
+                    reply = EmbedReply(
+                        "Images - Add - Error",
+                        "images",
+                        error=True,
+                        description="The image provided is too large for Discord to store.",
+                    )
+                    await reply.send(ctx)
+                    return
+                else:
+                    raise e
         elif image_link:
             link = image_link
 
