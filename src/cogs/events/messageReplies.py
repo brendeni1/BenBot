@@ -5,7 +5,7 @@ from discord.ext import commands
 
 from src.classes import *
 
-SINGLETON_REPLIES = {r"(?=.*\bhow\b)(?=.*\bwe\b)": '"we" 🥀'}
+SINGLETON_REPLIES = {r"\bwe\b": '"we" 🥀'}
 
 
 class SingletonRepliesCog(commands.Cog):
@@ -18,7 +18,7 @@ class SingletonRepliesCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, msg: discord.Message):
-        if msg.content:
+        if msg.content and self.bot.user.id != msg.author.id:
             concatenatedReply = ""
 
             for regexStr, replyStr in SINGLETON_REPLIES.items():
