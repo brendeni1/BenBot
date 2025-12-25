@@ -25,7 +25,7 @@ class ExperienceAttribute:
         self.experience = None
 
     def getEmojiForAttribute(self) -> str | None:
-        return constants.MOVIE_EXPERIENCE_ATTRIBUTE_EMOJIS.get(self.id)
+        return constants.MOVIE_EXPERIENCE_ATTRIBUTE_EMOJIS.get(self.id, self.name)
 
 
 class ExperienceTime:

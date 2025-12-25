@@ -135,6 +135,7 @@ MOVIE_CINEMAS = {
 
 MOVIE_EXPERIENCE_ATTRIBUTE_EMOJIS = {
     "ULTRA 2D": "<:landmarklaserultra:1438620427382689905>",
+    "ULTRA 3D": "<:landmarklaserultra3d:1453763621757779979>",
     "CC": "<:landmarkcc:1438620425231007938>",
     "DVS": "<:landmarkdvs:1438620426074067056>",
     "Recliner": "<:landmarkrecliner:1438620431312617543>",
@@ -144,8 +145,12 @@ MOVIE_EXPERIENCE_ATTRIBUTE_EMOJIS = {
     "2D": "<:landmark2d:1438620424177975316>",
     "3D": "<:landmark3d:1438626057782693888>",
     "LUXE 2D": "<:landmarkluxe:1438624990562881716>",
+    "LUXE 3D": "<:landmarkluxe3d:1453769019264860212>",
     "18+": "<:landmark18:1438624988318924902>",
     "EnglishSub": "<:landmarkenglishsub:1438624989262647356>",
+    "SpecialEvt": "<:landmarkspecialevent:1453763623603278008>",
+    "Big Screen": "<:landmarkbigscreenrewind:1453763620713533618>",
+    "HFR": "<:highframerate:1453768384419467435>",
 }
 
 MOVIE_EXPERIENCE_ATTRIBUTE_IGNORES = [
