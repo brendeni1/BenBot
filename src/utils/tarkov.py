@@ -1,5 +1,6 @@
 import discord
-import requests
+import aiohttp
+import asyncio
 import datetime
 from concurrent.futures import ThreadPoolExecutor
 
@@ -884,16 +885,19 @@ class ContainedItem:
         return f"{self.item.shortName} (*x{self.quantity:,}*)"
 
 
-def apiFetch(query: str) -> dict:
+async def apiFetch(query: str) -> dict:
+    """
+    Performs an asynchronous POST request using aiohttp.
+    """
     headers = {"Content-Type": "application/json"}
+    url = "https://api.tarkov.dev/graphql"
 
-    response = requests.post(
-        "https://api.tarkov.dev/graphql", headers=headers, json={"query": query}
-    )
-
-    response.raise_for_status()
-
-    return response.json()
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            url, headers=headers, json={"query": query}
+        ) as response:
+            response.raise_for_status()
+            return await response.json()
 
 
 def parseSimplePrice(amount):
@@ -977,7 +981,7 @@ def parseNestedItem(wrapper):
     )
 
 
-def fetchHideoutStations() -> list[HideoutStation]:
+async def fetchHideoutStations() -> list[HideoutStation]:
     hideoutQuery = """
     {
         hideoutStations(lang: en) {
@@ -1013,9 +1017,7 @@ def fetchHideoutStations() -> list[HideoutStation]:
         }
     }
     """
-
-    rawHideoutResponseData = apiFetch(query=hideoutQuery)
-
+    rawHideoutResponseData = await apiFetch(query=hideoutQuery)
     parsedHideoutStations: list[HideoutStation] = []
 
     if (
@@ -1034,21 +1036,19 @@ def fetchHideoutStations() -> list[HideoutStation]:
                 parseHideoutStationLevel(l, station=station)
                 for l in stationData.get("levels", [])
             ]
-
             parsedHideoutStations.append(station)
 
     return parsedHideoutStations
 
 
-def fetchItems(
+async def fetchItems(
     itemQuery: str, byId: bool, limit: int = ITEM_SEARCH_QUERY_RETURN_LIMIT
 ) -> list[Item]:
-
     searchKey = "ids" if byId else "names"
 
-    itemQuery = f"""
+    graphql_query = f"""
     {{
-        items({searchKey}: ["{itemQuery}"], limit: {ITEM_SEARCH_QUERY_RETURN_LIMIT}) {{
+        items({searchKey}: ["{itemQuery}"], limit: {limit}) {{
             id
             name
             shortName
@@ -1057,35 +1057,15 @@ def fetchItems(
             height
             width
             weight
-            categories {{
-                id
-                name
-                normalizedName
-            }}
+            categories {{ id name normalizedName }}
             basePrice
             avg24hPrice
             low24hPrice
             high24hPrice
             changeLast48h
             changeLast48hPercent
-            buyFor {{
-                vendor {{
-                    name
-                    normalizedName
-                }}
-                price
-                priceRUB
-                currency
-            }}
-            sellFor {{
-                vendor {{
-                    name
-                    normalizedName
-                }}
-                price
-                priceRUB
-                currency
-            }}
+            buyFor {{ vendor {{ name normalizedName }} price priceRUB currency }}
+            sellFor {{ vendor {{ name normalizedName }} price priceRUB currency }}
             updated
             image512pxLink
             gridImageLink
@@ -1093,243 +1073,46 @@ def fetchItems(
             wikiLink
             link
             usedInTasks {{
-                id
-                name
-                normalizedName
-                trader {{
-                    name
-                    description
-                    image4xLink
-                }}
-                map {{
-                    name
-                }}
-                experience
-                wikiLink
-                taskImageLink
-                minPlayerLevel
+                id name normalizedName 
+                trader {{ name description image4xLink }}
+                map {{ name }}
+                experience wikiLink taskImageLink minPlayerLevel
             }}
             receivedFromTasks {{
-                id
-                name
-                normalizedName
-                trader {{
-                    name
-                    description
-                    image4xLink
-                }}
-                map {{
-                    name
-                }}
-                experience
-                wikiLink
-                taskImageLink
-                minPlayerLevel
+                id name normalizedName 
+                trader {{ name description image4xLink }}
+                map {{ name }}
+                experience wikiLink taskImageLink minPlayerLevel
             }}
             bartersFor {{
-                id
-                trader {{
-                    name
-                    description
-                    image4xLink
-                }}
-                level
-                requiredItems {{
-                    item {{
-                        id
-                        name
-                        shortName
-                        normalizedName
-                        description
-                        height
-                        width
-                        weight
-                        image512pxLink
-                        gridImageLink
-                        inspectImageLink
-                        wikiLink
-                        link
-                    }}
-                    count
-                    quantity
-                }}
-                rewardItems {{
-                    item {{
-                        id
-                        name
-                        shortName
-                        normalizedName
-                        description
-                        height
-                        width
-                        weight
-                        image512pxLink
-                        gridImageLink
-                        inspectImageLink
-                        wikiLink
-                        link
-                    }}
-                    count
-                    quantity
-                }}
+                id trader {{ name description image4xLink }} level
+                requiredItems {{ item {{ id name shortName normalizedName description height width weight image512pxLink gridImageLink inspectImageLink wikiLink link }} count quantity }}
+                rewardItems {{ item {{ id name shortName normalizedName description height width weight image512pxLink gridImageLink inspectImageLink wikiLink link }} count quantity }}
                 buyLimit
             }}
             bartersUsing {{
-                id
-                trader {{
-                    name
-                    description
-                    image4xLink
-                }}
-                level
-                requiredItems {{
-                    item {{
-                        id
-                        name
-                        shortName
-                        normalizedName
-                        description
-                        weight
-                        height
-                        width
-                        image512pxLink
-                        gridImageLink
-                        inspectImageLink
-                        wikiLink
-                        link
-                    }}
-                    count
-                    quantity
-                }}
-                rewardItems {{
-                    item {{
-                        id
-                        name
-                        shortName
-                        normalizedName
-                        description
-                        weight
-                        height
-                        width
-                        image512pxLink
-                        gridImageLink
-                        inspectImageLink
-                        wikiLink
-                        link
-                    }}
-                    count
-                    quantity
-                }}
+                id trader {{ name description image4xLink }} level
+                requiredItems {{ item {{ id name shortName normalizedName description weight height width image512pxLink gridImageLink inspectImageLink wikiLink link }} count quantity }}
+                rewardItems {{ item {{ id name shortName normalizedName description weight height width image512pxLink gridImageLink inspectImageLink wikiLink link }} count quantity }}
                 buyLimit
             }}
             craftsFor {{
-                id
-                station {{
-                    id
-                    name
-                    normalizedName
-                    imageLink
-                }}
-                level
-                duration
-                requiredItems {{
-                    item {{
-                        id
-                        name
-                        shortName
-                        normalizedName
-                        description
-                        weight
-                        height
-                        width
-                        image512pxLink
-                        gridImageLink
-                        inspectImageLink
-                        wikiLink
-                        link
-                    }}
-                    count
-                    quantity
-                }}
-                rewardItems {{
-                    item {{
-                        id
-                        name
-                        shortName
-                        normalizedName
-                        description
-                        weight
-                        height
-                        width
-                        image512pxLink
-                        gridImageLink
-                        inspectImageLink
-                        wikiLink
-                        link
-                    }}
-                    count
-                    quantity
-                }}
+                id station {{ id name normalizedName imageLink }} level duration
+                requiredItems {{ item {{ id name shortName normalizedName description weight height width image512pxLink gridImageLink inspectImageLink wikiLink link }} count quantity }}
+                rewardItems {{ item {{ id name shortName normalizedName description weight height width image512pxLink gridImageLink inspectImageLink wikiLink link }} count quantity }}
             }}
             craftsUsing {{
-                id
-                station {{
-                    id
-                    name
-                    normalizedName
-                    imageLink
-                }}
-                level
-                duration
-                requiredItems {{
-                    item {{
-                        id
-                        name
-                        shortName
-                        normalizedName
-                        description
-                        weight
-                        height
-                        width
-                        image512pxLink
-                        gridImageLink
-                        inspectImageLink
-                        wikiLink
-                        link
-                    }}
-                    count
-                    quantity
-                }}
-                rewardItems {{
-                    item {{
-                        id
-                        name
-                        shortName
-                        normalizedName
-                        description
-                        weight
-                        height
-                        width
-                        image512pxLink
-                        gridImageLink
-                        inspectImageLink
-                        wikiLink
-                        link
-                    }}
-                    count
-                    quantity
-                }}
+                id station {{ id name normalizedName imageLink }} level duration
+                requiredItems {{ item {{ id name shortName normalizedName description weight height width image512pxLink gridImageLink inspectImageLink wikiLink link }} count quantity }}
+                rewardItems {{ item {{ id name shortName normalizedName description weight height width image512pxLink gridImageLink inspectImageLink wikiLink link }} count quantity }}
             }}
         }}
     }}
     """
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        item_future = executor.submit(apiFetch, itemQuery)
-        hideout_future = executor.submit(fetchHideoutStations)
-
-        rawItemResponseData = item_future.result()
-        parsedHideoutStations = hideout_future.result()
+    rawItemResponseData, parsedHideoutStations = await asyncio.gather(
+        apiFetch(graphql_query), fetchHideoutStations()
+    )
 
     requiredHideoutItemIDS = {
         req.item.id

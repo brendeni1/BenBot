@@ -34,7 +34,7 @@ class TarkovItemCommands(commands.Cog):
         try:
             await ctx.defer()
 
-            relevantItems = tarkov.fetchItems(itemQuery=query, byId=by_id)
+            relevantItems = await tarkov.fetchItems(itemQuery=query, byId=by_id)
 
             if not relevantItems:
                 raise Exception("No items found for that query!")
