@@ -2,7 +2,7 @@ import os
 import aiohttp
 
 URL_SHORTENER_NAME = "Shlink"
-URL_SHORTENER_BASE_API_URL = "https://l.brendenian.net"
+URL_SHORTENER_BASE_API_URL = "https://breia.net"
 URL_SHORTENER_VERSION = 3
 URL_SHORTENER_API_KEY = os.getenv("URL_SHORTENER_API_KEY")
 
