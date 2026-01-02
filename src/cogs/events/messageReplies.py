@@ -1,11 +1,12 @@
 import discord
+import random
 import re
 import sys
 from discord.ext import commands
 
 from src.classes import *
 
-SINGLETON_REPLIES = {r"\bwe\b": '"we" 🥀'}
+SINGLETON_REPLIES = {r"\bwe\b": ['"we" 🥀', "https://i.breia.net/DBYjGFHE.gif"]}
 
 
 class SingletonRepliesCog(commands.Cog):
@@ -21,11 +22,13 @@ class SingletonRepliesCog(commands.Cog):
         if msg.content and self.bot.user.id != msg.author.id:
             concatenatedReply = ""
 
-            for regexStr, replyStr in SINGLETON_REPLIES.items():
+            for regexStr, replyStrs in SINGLETON_REPLIES.items():
                 if re.findall(
                     pattern=regexStr, string=msg.content, flags=re.IGNORECASE
                 ):
-                    concatenatedReply += replyStr + "\n"
+                    chosenReply = random.choice(replyStrs)
+
+                    concatenatedReply += chosenReply + "\n"
 
             if concatenatedReply:
                 await msg.reply(content=concatenatedReply)
