@@ -6,7 +6,10 @@ from discord.ext import commands
 
 from src.classes import *
 
-SINGLETON_REPLIES = {r"\bwe\b": ['"we" 🥀', "https://i.breia.net/DBYjGFHE.gif"]}
+SINGLETON_REPLIES = {
+    r"\bwe\b": ['"we" 🥀', "https://i.breia.net/DBYjGFHE.gif"],
+    r"(a|i)(llah)": ["https://i.breia.net/bVk0DWNA.png"],
+}
 
 
 class SingletonRepliesCog(commands.Cog):
