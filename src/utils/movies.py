@@ -287,9 +287,8 @@ async def parseShowtimes(
             rawFilmID = rawFilmData.get("FilmId", None)
             rawName = rawFilmData.get("Title", None)
 
-            for e in EXCLUDED_LANDMARK_BULLSHIT:
-                if e in rawName:
-                    continue
+            if rawName in EXCLUDED_LANDMARK_BULLSHIT:
+                continue
 
             friendlyName = rawFilmData.get("FriendlyName", "N/A")
 
