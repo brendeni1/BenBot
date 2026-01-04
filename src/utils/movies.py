@@ -17,6 +17,8 @@ TRAILER_SEARCH_KEYWORDS = ""
 
 LANDMARK_LOGO = "https://i.breia.net/hIdg4zuf.jpg"
 
+EXCLUDED_LANDMARK_BULLSHIT = ["Mystery Movie", "Behind the Scenes"]
+
 
 class ExperienceAttribute:
     def __init__(self, id: int, name: str, description: str, precedence: int):
@@ -285,8 +287,9 @@ async def parseShowtimes(
             rawFilmID = rawFilmData.get("FilmId", None)
             rawName = rawFilmData.get("Title", None)
 
-            if "Mystery Movie" in rawName:
-                continue
+            for e in EXCLUDED_LANDMARK_BULLSHIT:
+                if e in rawName:
+                    continue
 
             friendlyName = rawFilmData.get("FriendlyName", "N/A")
 
