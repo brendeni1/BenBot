@@ -11,8 +11,8 @@ SINGLETON_REPLIES = {
     r"\bi guess bro\b": ["https://i.breia.net/DBYjGFHE.gif"],
     r"\b(soft hands)|(blue collar)\b": ["https://i.breia.net/Cfp1aO8R.gif"],
     r"(a|i)(llah)": ["https://i.breia.net/bVk0DWNA.png"],
-    r"(unemployed)": ["https://i.breia.net/RzEbgwMN.gif"],
-    r"(\bemployed)": ["https://i.breia.net/kjD8A4o3.gif"],
+    r"(unemploy(ed|ment))": ["https://i.breia.net/RzEbgwMN.gif"],
+    r"(\bemploy(ed|ment))": ["https://i.breia.net/kjD8A4o3.gif"],
 }
 
 

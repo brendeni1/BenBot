@@ -15,6 +15,8 @@ TRAILER_SEARCH_CUTOFF = 40.0
 TRAILER_SEARCH_INIT_AMOUNT = 250
 TRAILER_SEARCH_KEYWORDS = ""
 
+LANDMARK_LOGO = "https://i.breia.net/hIdg4zuf.jpg"
+
 
 class ExperienceAttribute:
     def __init__(self, id: int, name: str, description: str, precedence: int):
@@ -280,18 +282,19 @@ async def parseShowtimes(
             ),
             reverse=True,
         ):
-            rawFilmID = rawFilmData["FilmId"]
-            rawName = rawFilmData["Title"]
+            rawFilmID = rawFilmData.get("FilmId", None)
+            rawName = rawFilmData.get("Title", None)
 
             if "Mystery Movie" in rawName:
                 continue
 
-            friendlyName = rawFilmData["FriendlyName"]
+            friendlyName = rawFilmData.get("FriendlyName", "N/A")
 
-            rawRating = rawFilmData["Cert"]
+            rawRating = rawFilmData.get("Cert", "TBC")
+
             formattedRating = rawRating if rawRating != "TBC" else None
 
-            rawImage = rawFilmData["Img"]
+            rawImage = rawFilmData.get("Img", LANDMARK_LOGO)
 
             imageFileObject = await images.fetchToFile(
                 rawImage,
@@ -303,12 +306,12 @@ async def parseShowtimes(
             rawReleaseDate = rawFilmData["ReleaseDate"]
             convertedReleaseDate = dates.simpleDateObj(rawReleaseDate)
 
-            rawRuntime = int(rawFilmData["RunTime"])
-            rawDescription = rawFilmData["Teaser"]
-            rawCast = rawFilmData["Cast"]
-            rawDirector = rawFilmData["Director"]
-            rawComingSoon = rawFilmData["IsComingSoon"]
-            rawNowShowing = rawFilmData["IsNowShowing"]
+            rawRuntime = int(rawFilmData.get("RunTime", 0))
+            rawDescription = rawFilmData.get("Teaser", "N/A")
+            rawCast = rawFilmData.get("Cast", "N/A")
+            rawDirector = rawFilmData.get("Director", "N/A")
+            rawComingSoon = rawFilmData.get("IsComingSoon", False)
+            rawNowShowing = rawFilmData.get("IsNowShowing", False)
 
             filmObject = Film(
                 id=rawFilmID,
