@@ -68,10 +68,17 @@ class ShortenURLCommands(commands.Cog):
                 "Shorten URL - Add", "tools", description="URL successfully shortened."
             )
 
+            replyView = discord.ui.View(
+                OpenLink(
+                    "View Short Links (Tailscale Only)", "https://links.brendenian.net"
+                ),
+                timeout=None,
+            )
+
             reply.add_field(name="Short URL", value=short_url, inline=False)
             reply.add_field(name="Destination URL", value=url, inline=False)
 
-            await reply.send(ctx)
+            await reply.send(ctx, view=replyView)
         except Exception as e:
             reply = EmbedReply(
                 "Shorten URL - Error",
@@ -104,8 +111,15 @@ class ShortenURLCommands(commands.Cog):
                 "tools",
                 description=f"Successfully deleted short URL with code: `{short_code}`",
             )
-            await reply.send(ctx)
 
+            replyView = discord.ui.View(
+                OpenLink(
+                    "View Short Links (Tailscale Only)", "https://links.brendenian.net"
+                ),
+                timeout=None,
+            )
+
+            await reply.send(ctx, view=replyView)
         except Exception as e:
             # Handle specific error messages based on the documentation image
             error_msg = str(e)
