@@ -14,6 +14,20 @@ SINGLETON_REPLIES = {
     r"(unemploy(ed|ment))": ["https://i.breia.net/RzEbgwMN.gif"],
     r"(\bemploy(ed|ment))": ["https://i.breia.net/kjD8A4o3.gif"],
     r"hmm+": ["https://i.breia.net/ucUfSviT.gif"],
+    r"(6|six)(.*)(?=(7|seven))": [
+        "https://i.breia.net/etPwz8wR.png",
+        "https://i.breia.net/ZrYEByai.gif",
+        "https://i.breia.net/Ff2MTS2c.gif",
+        "https://i.breia.net/Jd6LOyTe.gif",
+        "https://i.breia.net/JkoqRu6o.gif",
+    ],
+    r"\bhouse\b": [
+        "https://i.breia.net/ntV3hf4i.jpg",
+        "https://i.breia.net/a4e4rdVi.jpg",
+        "https://i.breia.net/EadhEmsz.gif",
+        "https://i.breia.net/bOaRxQFF.jpg",
+        "https://i.breia.net/wzJTadQQ.jpg",
+    ],
 }
 
 
