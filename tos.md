@@ -3,7 +3,7 @@
 **Effective Date:** September 30, 2025  
 **Last Updated:** September 30, 2025
 
-Welcome to **BenBot** (“the Bot”). By using this Bot, you agree to the following Terms of Service. If you do not agree, you must not use the Bot.
+Welcome to **BenBot** (“the Bot”). By using the Bot, you agree to the following Terms of Service. If you do not agree, you must not use the Bot.
 
 ## 1. Eligibility
 - You must comply with Discord’s [Terms of Service](https://discord.com/terms) and [Community Guidelines](https://discord.com/guidelines).  
