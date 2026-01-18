@@ -8,7 +8,10 @@ from src.classes import *
 
 SINGLETON_REPLIES = {
     r"\bwe\b": ['"we" 🥀', "https://i.breia.net/DBYjGFHE.gif"],
-    r"\bi guess bro\b": ["https://i.breia.net/DBYjGFHE.gif"],
+    r"\bi guess bro\b": [
+        "https://i.breia.net/DBYjGFHE.gif",
+        "https://i.breia.net/4d7SohgU.png",
+    ],
     r"\b(soft hands)|(blue collar)\b": ["https://i.breia.net/Cfp1aO8R.gif"],
     r"((a|i)(llah))|(\bhabibi\b)": ["https://i.breia.net/bVk0DWNA.png"],
     r"(unemploy(ed|ment))": ["https://i.breia.net/RzEbgwMN.gif"],
