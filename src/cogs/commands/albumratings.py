@@ -261,7 +261,7 @@ class AlbumRatings(commands.Cog):
 
                 albumDetailsFromID = music.fetchAlbumDetailsByID(albumChoiceID)
 
-                parsedAlbumDetails: music.Album = music.parseAlbumDetails(
+                parsedAlbumDetails: music.Album = await music.parseAlbumDetails(
                     albumDetailsFromID, ctx.user, song_fetch_limit
                 )
 

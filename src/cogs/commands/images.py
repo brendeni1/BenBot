@@ -4,7 +4,6 @@ import sys
 from discord.ext import commands
 
 from src.classes import *
-from src import constants
 from src.utils import imagesCog, images, text, dates
 
 MIN_IMAGE_DESCRIPTION_LENGTH = 2
@@ -39,28 +38,20 @@ class ImageCommands(commands.Cog):
     ):
         await ctx.defer()
 
-        if image_attachment:
-            # Send the file to a permanent storage channel
-            storage_channel = self.bot.get_channel(constants.STORAGE_CHANNEL_ID)
+        link = None
 
+        if image_attachment:
             try:
-                # Re-upload the file to get a "permanent" link
-                permanent_msg = await storage_channel.send(
-                    file=await image_attachment.to_file()
+                link = await images.uploadToChibisafe(image_attachment)
+            except Exception as e:
+                reply = EmbedReply(
+                    "Images - Add - Error",
+                    "images",
+                    error=True,
+                    description=f"Failed to upload to Chibisafe: {e}",
                 )
-                link = permanent_msg.attachments[0].url
-            except discord.HTTPException as e:
-                if e.status == 413:
-                    reply = EmbedReply(
-                        "Images - Add - Error",
-                        "images",
-                        error=True,
-                        description="The image provided is too large for Discord to store.",
-                    )
-                    await reply.send(ctx)
-                    return
-                else:
-                    raise e
+                await reply.send(ctx)
+                return
         elif image_link:
             link = image_link
 
@@ -76,7 +67,7 @@ class ImageCommands(commands.Cog):
             return
 
         try:
-            linkIsImage = images.urlIsImage(link)
+            linkIsImage = await images.urlIsImage(link)
 
             if not linkIsImage:
                 raise ValueError(

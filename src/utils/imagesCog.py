@@ -3,7 +3,7 @@ import datetime
 from dataclasses import dataclass
 
 from src.classes import *
-from src.utils import dates, text
+from src.utils import dates, text, images
 
 DELETE_IMAGE_CONFIRMATION_TIMEOUT = 1 * (60)
 SELECT_IMAGE_CONFIRMATION_TIMEOUT = 14.9 * (60)

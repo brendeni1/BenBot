@@ -1,73 +1,103 @@
-from PIL import Image
-import numpy as np
-import requests
 import discord
+import aiohttp
+import os
+import numpy as np
 from io import BytesIO
+from PIL import Image
 from sklearn.cluster import KMeans
-import matplotlib.pyplot as plt
 
 
-def extractColours(url, num_colors=1) -> list[list[int, int, int]]:
-    # Download image
-    response = requests.get(url)
-    img = Image.open(BytesIO(response.content)).convert("RGB")
-    img = img.resize((150, 150))  # Resize for faster clustering
+async def uploadToChibisafe(image: discord.Attachment | bytes):
+    token = os.getenv("CHIBISAFE_BENBOT_TOKEN")
+    cdnEndpoint = "https://cdn.brendenian.net/api/upload"
 
-    # Convert image to numpy array
+    # Download the file from Discord into memory asynchronously
+    if isinstance(image, discord.Attachment):
+        fileBytes = await image.read()
+    else:
+        fileBytes = image
+
+    # Prepare the multipart form data
+    data = aiohttp.FormData()
+
+    data.add_field(
+        "file",
+        fileBytes,
+        filename=image.filename,
+        content_type=image.content_type,
+    )
+
+    headers = {"x-api-key": f"{token}", "Accept": "application/json"}
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(cdnEndpoint, data=data, headers=headers) as response:
+            if response.status == 200:
+                res_data = await response.json()
+                return res_data.get("url")
+            else:
+                error_text = await response.text()
+                raise Exception(
+                    f"Chibisafe Upload Failed ({response.status}): {error_text}"
+                )
+
+
+async def extractColours(url: str, num_colors: int = 1) -> list:
+    """Downloads image and runs KMeans clustering to find dominant colors."""
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            if response.status != 200:
+                return [[0, 0, 0]]  # Fallback to black on error
+
+            content = await response.read()
+
+    # Processing with Pillow/Numpy (CPU intensive, but manageable)
+    img = Image.open(BytesIO(content)).convert("RGB")
+    img = img.resize((150, 150))
+
     img_data = np.array(img)
-    img_data = img_data.reshape((-1, 3))  # Flatten to list of RGB pixels
+    img_data = img_data.reshape((-1, 3))
 
-    # Run KMeans clustering
-    kmeans = KMeans(n_clusters=num_colors, random_state=42)
+    kmeans = KMeans(n_clusters=num_colors, random_state=42, n_init="auto")
     kmeans.fit(img_data)
 
-    colours = kmeans.cluster_centers_.astype(int)
-
+    colours = kmeans.cluster_centers_.astype(int).tolist()
     return colours
 
 
 async def fetchToFile(url: str, filename: str) -> discord.File:
     """
-    Fetch an image from a URL, load it with Pillow,
-    and return a Discord File object ready for attachment embedding.
-
-    Use in embeds like:
-    embed.set_thumbnail(url=f"attachment://{filename}")
+    Fetch an image from a URL and return a Discord File object.
+    Useful for attachment-based embedding.
     """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-CA,en;q=0.7",
+    }
 
-    # Fetch the image with browser-like headers to avoid blocks
-    r = requests.get(
-        url,
-        headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Accept-Language": "en-CA,en;q=0.7",
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Referer": "https://www.landmarkcinemas.com/showtimes/windsor",
-            "Cookie": "LMC_TheatreId=7802; LMC_TheatreURL=%2Fshowtimes%2Fwindsor; LMC_TheatreName=%2Fnow-playing%2Fwindsor",
-        },
-    )
-    r.raise_for_status()
+    async with aiohttp.ClientSession(headers=headers) as session:
+        async with session.get(url) as response:
+            response.raise_for_status()
+            content = await response.read()
 
-    # Load image with Pillow
-    img = Image.open(BytesIO(r.content))
-
-    # Convert/save into memory buffer
+    # Use Pillow to ensure it's a valid image and preserve format
+    img = Image.open(BytesIO(content))
     buffer = BytesIO()
     img.save(buffer, format=img.format if img.format else "PNG")
     buffer.seek(0)
 
-    # Return Discord File object
     return discord.File(fp=buffer, filename=filename)
 
 
-def urlIsImage(url: str) -> bool:
+async def urlIsImage(url: str) -> bool:
+    """Performs a HEAD request to check if a URL points to an image."""
     try:
-        r = requests.head(url, allow_redirects=True, timeout=5)
-        if r.status_code != 200:
-            return False
+        async with aiohttp.ClientSession() as session:
+            async with session.head(url, allow_redirects=True, timeout=5) as response:
+                if response.status != 200:
+                    return False
 
-        content_type = r.headers.get("Content-Type", "")
-        return content_type.startswith("image/")
-    except requests.RequestException:
+                content_type = response.headers.get("Content-Type", "")
+                return content_type.startswith("image/")
+    except Exception:
         return False

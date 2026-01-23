@@ -1077,7 +1077,7 @@ class Album:
             else self.coverImage
         )
 
-    def setCoverImage(self, *, url: str | None = None, custom: bool = False):
+    async def setCoverImage(self, *, url: str | None = None, custom: bool = False):
         if url:
             if custom:
                 self.customCoverImage = url
@@ -1087,7 +1087,7 @@ class Album:
             self.customCoverImage = None
 
         self.coverImageColour = discord.Colour.from_rgb(
-            *(int(i) for i in images.extractColours(self.getCoverImage())[0])
+            *(int(i) for i in await images.extractColours(self.getCoverImage())[0])
         )
 
     def parseComments(
@@ -1404,7 +1404,7 @@ class CustomAlbumCoverModal(discord.ui.Modal):
         url = self.children[0].value
 
         if url:
-            isImage = images.urlIsImage(url)
+            isImage = await images.urlIsImage(url)
 
             if not isImage:
                 errorEmbed = EmbedReply(
@@ -1418,7 +1418,7 @@ class CustomAlbumCoverModal(discord.ui.Modal):
 
                 return
 
-        self.obj.setCoverImage(url=url, custom=True)
+        await self.obj.setCoverImage(url=url, custom=True)
 
         await self.view.showTrackAndRating(ctx)
 
@@ -1509,7 +1509,7 @@ def fetchAlbumDetailsByID(albumID: str) -> dict:
     return albumResults
 
 
-def parseAlbumDetails(
+async def parseAlbumDetails(
     data: dict,
     createdBy: discord.Member,
     trackLimit: int,
@@ -1544,7 +1544,7 @@ def parseAlbumDetails(
         comments=comments,
     )
 
-    album.setCoverImage(url=coverImageURL)
+    await album.setCoverImage(url=coverImageURL)
 
     rawTracks: list[dict] = data["tracks"]["items"][:trackLimit]
 
