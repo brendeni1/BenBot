@@ -8,7 +8,7 @@ from src.classes import *
 
 SINGLETON_REPLIES = {
     r"\bwe\b": ['"we" 🥀', "https://i.breia.net/DBYjGFHE.gif"],
-    r"\bi guess bro\b": [
+    r"(\bi guess bro\b)|(\bigb\b)": [
         "https://i.breia.net/DBYjGFHE.gif",
         "https://i.breia.net/4d7SohgU.png",
     ],
@@ -30,6 +30,22 @@ SINGLETON_REPLIES = {
         "https://i.breia.net/EadhEmsz.gif",
         "https://i.breia.net/bOaRxQFF.jpg",
         "https://i.breia.net/wzJTadQQ.jpg",
+    ],
+    r"(epstien)|(\befn\b)": [
+        "https://i.brendenian.net/u8DDAIXB.png",
+        "https://i.breia.net/JOyTQjqa.jpg",
+        "https://i.breia.net/bvzpLkzn.jpg",
+        "https://i.breia.net/EhpcUria.jpg",
+        "https://i.breia.net/aRx5hsFT.jpg",
+        "https://i.breia.net/Zd2oR99V.jpg",
+        "https://i.breia.net/gaYFAOCd.jpg",
+        "https://i.breia.net/8GyK9yXm.jpg",
+        "https://i.breia.net/sm1Fjvj1.webp",
+        "https://i.breia.net/4DkTVvZa.jpg",
+        "https://i.breia.net/OYeVrcPS.jpg",
+        "https://i.breia.net/dqhFPnSb.jpg",
+        "https://i.breia.net/Xe0lpIjj.webp",
+        "https://i.breia.net/GpkETh0N.jpg",
     ],
 }
 
