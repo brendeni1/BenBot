@@ -5,6 +5,7 @@ import sys
 from discord.ext import commands
 
 from src.utils import dates
+from src.cogs.events import messageReplies
 
 from src.classes import *
 
@@ -56,6 +57,68 @@ class Debug(commands.Cog):
         reply.set_footer(text="Use the command to see available parameters.")
 
         await reply.send(ctx)
+
+    replyCommandGroup = discord.SlashCommandGroup(
+        "replies",
+        description="Commands for seeing message replies.",
+        guild_ids=[799341195109203998],
+    )
+
+    @replyCommandGroup.command(
+        description="Returns a list of regexs that trigger message replies.",
+        guild_ids=[799341195109203998],
+    )
+    async def list(self, ctx):
+        try:
+            replyKeys = messageReplies.SINGLETON_REPLIES.keys()
+
+            replyKeys = [f"· `{key}`" for key in replyKeys] or "*(No Replies)*"
+
+            reply = EmbedReply(
+                "Replies - List", "debug", description="\n".join(replyKeys)
+            )
+
+            await reply.send(ctx)
+        except Exception as e:
+            reply = EmbedReply(
+                "Replies - List - Error",
+                "images",
+                error=True,
+                description=f"Error: {e}",
+            )
+            await reply.send(ctx)
+
+    @replyCommandGroup.command(
+        description="Returns a list of replies from the specified regex.",
+        guild_ids=[799341195109203998],
+    )
+    async def search(
+        self,
+        ctx,
+        query: discord.Option(
+            str,
+            description="The regex that you would like to query. Use /replies list to see a list.",
+        ),  # type: ignore
+    ):
+        try:
+            replyItem = messageReplies.SINGLETON_REPLIES.get(query)
+
+            if not replyItem:
+                raise Exception("There were no replies that match that query.")
+
+            reply = EmbedReply(
+                "Replies - Search", "debug", description="\n".join(replyItem)
+            )
+
+            await reply.send(ctx)
+        except Exception as e:
+            reply = EmbedReply(
+                "Replies - Search - Error",
+                "images",
+                error=True,
+                description=f"Error: {e}",
+            )
+            await reply.send(ctx)
 
 
 def setup(bot):
