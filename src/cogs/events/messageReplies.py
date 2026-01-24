@@ -24,6 +24,18 @@ SINGLETON_REPLIES = {
         "https://i.breia.net/Jd6LOyTe.gif",
         "https://i.breia.net/JkoqRu6o.gif",
     ],
+    r"(\bcuddy\b)": [
+        "https://i.breia.net/2hkENBaG.jpg",
+        "https://i.breia.net/itF0kcbZ.png",
+    ],
+    r"(\bwilson\b)|(\bi too am in this episode\b)": [
+        "https://i.breia.net/qMD7YlEj.jpg",
+        "https://i.breia.net/gKGyBi8o.jpg",
+    ],
+    r"(\bforeman\b)|(\bvexes\b)": [
+        "https://i.breia.net/e8B0sYFl.png",
+        "https://i.breia.net/pXWLpEQF.png",
+    ],
     r"\bhouse\b": [
         "https://i.breia.net/ntV3hf4i.jpg",
         "https://i.breia.net/a4e4rdVi.jpg",
