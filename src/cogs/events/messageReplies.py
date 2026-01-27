@@ -58,6 +58,7 @@ SINGLETON_REPLIES = {
         "https://i.breia.net/dqhFPnSb.jpg",
         "https://i.breia.net/Xe0lpIjj.webp",
         "https://i.breia.net/GpkETh0N.jpg",
+        "https://i.breia.net/jLLqmtxY.png",
     ],
 }
 

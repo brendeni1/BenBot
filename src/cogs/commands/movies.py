@@ -160,9 +160,11 @@ class Movies(commands.Cog):
 
             rawShowtimeData = movies.fetchShowtimes(chain, location)
 
-            parsedShowtimeData = await movies.parseShowtimes(
-                rawShowtimeData, chain, province, locationObj, startDate=start_date
-            )
+            parsedShowtimeData = (
+                await movies.parseShowtimes(
+                    rawShowtimeData, chain, province, locationObj, startDate=start_date
+                )
+            )[:24]
 
             if chain == "Landmark":
                 reply = EmbedReply(
@@ -193,7 +195,7 @@ class Movies(commands.Cog):
 
             movieSelectView.message = selectionResponse
         except Exception as e:
-            # raise e
+            raise e
             reply = EmbedReply(
                 "Movie Showtimes - Error", "movies", True, description=f"Error: {e}"
             )

@@ -64,29 +64,41 @@ async def extractColours(url: str, num_colors: int = 1) -> list:
     return colours
 
 
-async def fetchToFile(url: str, filename: str) -> discord.File:
-    """
-    Fetch an image from a URL and return a Discord File object.
-    Useful for attachment-based embedding.
-    """
+async def fetchToFile(url: str, filename: str) -> discord.File | None:
+    # Use headers that mimic your successful browser request
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
-        "Accept": "image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "en-CA,en;q=0.7",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,*/*;q=0.8",
+        "Accept-Language": "en-CA,en-US;q=0.9,en;q=0.8",
+        "Referer": "https://www.landmarkcinemas.com/",
+        "Sec-Fetch-Dest": "image",
+        "Sec-Fetch-Mode": "no-cors",
+        "Sec-Fetch-Site": "same-site",
+        "Sec-Ch-Ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Brave";v="144"',
     }
 
-    async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.get(url) as response:
-            response.raise_for_status()
-            content = await response.read()
+    try:
+        # Increased timeout and added the headers to the session
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(url, timeout=10) as response:
+                # Check status manually instead of raise_for_status()
+                if response.status != 200:
+                    print(f"Failed to fetch image: {response.status} for {url}")
+                    return None
 
-    # Use Pillow to ensure it's a valid image and preserve format
-    img = Image.open(BytesIO(content))
-    buffer = BytesIO()
-    img.save(buffer, format=img.format if img.format else "PNG")
-    buffer.seek(0)
+                content = await response.read()
 
-    return discord.File(fp=buffer, filename=filename)
+        # Process the image with Pillow
+        img = Image.open(BytesIO(content))
+        buffer = BytesIO()
+        img.save(buffer, format=img.format if img.format else "PNG")
+        buffer.seek(0)
+
+        return discord.File(fp=buffer, filename=filename)
+
+    except Exception as e:
+        print(f"Error processing image {url}: {e}")
+        return None
 
 
 async def urlIsImage(url: str) -> bool:

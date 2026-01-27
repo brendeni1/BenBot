@@ -524,9 +524,6 @@ class MovieSelect(discord.ui.Select):
             inline=False,
         )
 
-        # --- NEW LOGIC ---
-        # If a date was pre-selected, find that session and add its
-        # showtimes to the embed *before* sending the message.
         if self.preSelectedDate:
             try:
                 selectedSession = next(

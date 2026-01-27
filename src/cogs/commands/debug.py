@@ -28,7 +28,7 @@ class Debug(commands.Cog):
         latency = round(self.bot.latency * 1000)
         cpuUsage = psutil.cpu_percent(interval=1)
 
-        formatted = f"<:sus:816524395605786624>  Pong! Latency: {latency}ms. Uptime: {uptime}. CPU Usage: {cpuUsage}%.\n\nFor a list of commands and a short description, use '/commands'.\n\nSource code: https://bb.brendenian.net"
+        formatted = f"<:sus:816524395605786624>  Pong! Latency: {latency}ms. Uptime: {uptime}. CPU Usage: {cpuUsage}%.\n\nFor a list of commands and a short description, use '/commands'.\n\nSource code: https://breia.net/bb"
 
         reply = EmbedReply("Ping", "debug", description=formatted)
 
@@ -74,8 +74,10 @@ class Debug(commands.Cog):
 
             replyKeys = [f"· `{key}`" for key in replyKeys] or "*(No Replies)*"
 
+            replyKeysTrunc = text.truncateList(replyKeys, 4000)
+
             reply = EmbedReply(
-                "Replies - List", "debug", description="\n".join(replyKeys)
+                "Replies - List", "debug", description="\n".join(replyKeysTrunc)
             )
 
             await reply.send(ctx)
@@ -106,8 +108,10 @@ class Debug(commands.Cog):
             if not replyItem:
                 raise Exception("There were no replies that match that query.")
 
+            replyItemTrunc = text.truncateList(replyItem, 4000)
+
             reply = EmbedReply(
-                "Replies - Search", "debug", description="\n".join(replyItem)
+                "Replies - Search", "debug", description="\n".join(replyItemTrunc)
             )
 
             await reply.send(ctx)
