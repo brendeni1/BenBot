@@ -28,7 +28,7 @@ class Debug(commands.Cog):
         latency = round(self.bot.latency * 1000)
         cpuUsage = psutil.cpu_percent(interval=1)
 
-        formatted = f"<:sus:816524395605786624>  Pong! Latency: {latency}ms. Uptime: {uptime}. CPU Usage: {cpuUsage}%.\n\nFor a list of commands and a short description, use '/commands'.\n\nSource code: https://breia.net/bb"
+        formatted = f"<:sus:816524395605786624>  Pong! Latency: {latency}ms. Uptime: {uptime}. CPU Usage: {cpuUsage}%.\n\nFor a list of commands and a short description, use '/commands'.\n\nSource code: https://breia.net/bb\nStatus Page: https://status.breia.net"
 
         reply = EmbedReply("Ping", "debug", description=formatted)
 
