@@ -1087,7 +1087,7 @@ class Album:
             self.customCoverImage = None
 
         self.coverImageColour = discord.Colour.from_rgb(
-            *(int(i) for i in await images.extractColours(self.getCoverImage())[0])
+            *(int(i) for i in (await images.extractColours(self.getCoverImage()))[0])
         )
 
     def parseComments(

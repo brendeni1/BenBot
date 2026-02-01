@@ -349,6 +349,7 @@ class AlbumRatings(commands.Cog):
 
                 continue
             except Exception as e:
+                # braise e
                 reply = EmbedReply(
                     "Album Ratings - Create Rating - Error",
                     "albumratings",
@@ -363,7 +364,7 @@ class AlbumRatings(commands.Cog):
             await msg.delete()
 
             reply = EmbedReply(
-                "Album Ratings - Error",
+                "Album Ratings - Create Rating - Error",
                 "albumratings",
                 True,
                 description="The Spotify API seems to be having issues right now.\n\nPlease try again later.",
