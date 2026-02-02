@@ -76,9 +76,7 @@ async def fetchInstagramPosts(username: str) -> list["InstagramPost"]:
                 )
 
                 views = (
-                    rawResult.get("ig_play_count")
-                    or rawResult.get("play_count")
-                    or None
+                    rawResult.get("ig_play_count") or rawResult.get("play_count") or 0
                 )
 
                 post = InstagramPost(
@@ -90,10 +88,10 @@ async def fetchInstagramPosts(username: str) -> list["InstagramPost"]:
                         timestamp=rawResult.get("taken_at", 0)
                     ),
                     caption=rawResult.get("caption", ""),
-                    likes=rawResult.get("like_count", None),
-                    comments=rawResult.get("comment_count", None),
+                    likes=rawResult.get("like_count", 0),
+                    comments=rawResult.get("comment_count", 0),
                     views=views,
-                    reposts=rawResult.get("reshare_count", None),
+                    reposts=rawResult.get("reshare_count", 0),
                     postLink=rawResult.get("permalink", ""),
                     mediaLink=rawResult.get("media_url", ""),
                     thumbnailLink=rawResult.get("thumbnail_url", ""),
@@ -165,7 +163,7 @@ class InstagramPost:
 
         reply.add_field(
             name="Engagement",
-            value=f"👁️ {self.likes} ❤️ {self.likes}\n💬 {self.comments} 🔁 {self.comments}",
+            value=f"👁️ {'{:,}'.format(self.views)} ❤️ {'{:,}'.format(self.likes)}\n💬 {'{:,}'.format(self.comments)} 🔁 {'{:,}'.format(self.reposts)}",
         )
 
         reply.add_field(
