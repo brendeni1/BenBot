@@ -3,6 +3,7 @@ import sys
 from discord.ext import commands
 
 from src.classes import *
+from src.utils import socialmedia
 
 
 class InstagramCommands(commands.Cog):
@@ -20,22 +21,56 @@ class InstagramCommands(commands.Cog):
     )
 
     @instagramCommandsGroup.command(
-        description="Template for commands.", guild_ids=[799341195109203998]
+        description="Fetch a user's latest Instagram posts by username.",
+        guild_ids=[799341195109203998],
     )
     async def latest(
         self,
         ctx: discord.ApplicationContext,
         username: discord.Option(
-            "str", description="The Instagram username to fetch posts for."
+            str, description="The Instagram username to fetch posts for."
         ),  # type: ignore
     ):
         await ctx.defer()
 
         try:
-            pass
+            fetchedPosts = await socialmedia.fetchInstagramPosts(username=username)
+
+            paginatedPosts = socialmedia.InstagramPaginator(fetchedPosts)
+
+            await paginatedPosts.respond(ctx.interaction)
         except Exception as e:
             reply = EmbedReply(
-                "Instagram - Latest - Error", "", error=True, description=f"Error: {e}"
+                "Instagram - Latest - Error",
+                "socialmedia",
+                error=True,
+                description=f"Error: {e}",
+            )
+
+            await reply.send(ctx)
+
+    @instagramCommandsGroup.command(
+        description="Fetch Caffeinated Collective's latest Instagram posts.",
+        guild_ids=[799341195109203998],
+    )
+    async def cc(self, ctx: discord.ApplicationContext):
+        await ctx.defer()
+
+        try:
+            fetchedPosts = await socialmedia.fetchInstagramPosts(
+                username="caffeinatedcollectivee"
+            )
+
+            paginatedPosts = socialmedia.InstagramPaginator(fetchedPosts)
+
+            await paginatedPosts.respond(ctx.interaction)
+        except Exception as e:
+            raise e
+            reply = EmbedReply(
+                "Instagram - Latest (CC) - Error",
+                "socialmedia",
+                error=True,
+                description=f"Error: {e}",
             )
 
             await reply.send(ctx)

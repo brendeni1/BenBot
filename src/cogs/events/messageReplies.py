@@ -43,6 +43,9 @@ SINGLETON_REPLIES = {
         "https://i.breia.net/bOaRxQFF.jpg",
         "https://i.breia.net/wzJTadQQ.jpg",
     ],
+    r"\blego man\b": [
+        "https://i.breia.net/jeyr8Ysh.gif",
+    ],
     r"(epstien)|(\befn\b)": [
         "https://i.brendenian.net/u8DDAIXB.png",
         "https://i.breia.net/JOyTQjqa.jpg",
