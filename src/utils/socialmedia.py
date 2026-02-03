@@ -15,7 +15,7 @@ STEADY_API_TOKEN = os.getenv("STEADY_API_TOKEN")
 
 STEADY_API_BASE_INSTA = "https://api.steadyapi.com/v1/instagram"
 
-INSTAGRAM_POST_BROWSE_TIMEOUT = 890
+INSTAGRAM_POST_BROWSE_TIMEOUT = 14 * 60
 
 
 class InstagramPaginator(pages.Paginator):
