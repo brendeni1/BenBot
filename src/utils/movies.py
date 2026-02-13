@@ -2,15 +2,17 @@ import discord
 import requests
 import datetime
 import xmltodict
+import io  # Added for BytesIO
 
 from src.utils import dates
 from src.utils import text
 from src.utils import images
 from src import constants
 
+# Keep existing data classes
 from src.classes import *
 
-SELECTION_TIMEOUT = 600
+SELECTION_TIMEOUT = 890
 TRAILER_SEARCH_CUTOFF = 40.0
 TRAILER_SEARCH_INIT_AMOUNT = 250
 TRAILER_SEARCH_KEYWORDS = ""
@@ -117,7 +119,7 @@ class Film:
         name: str,
         friendlyName: str,
         ageRating: str | None,
-        image: discord.File,
+        image_bytes: bytes,  # Changed from discord.File to bytes
         filmURL: str,
         releaseDate: datetime.datetime,
         runtime: int,
@@ -136,7 +138,7 @@ class Film:
         self.name = name
         self.friendlyName = friendlyName
         self.ageRating = ageRating
-        self.image = image
+        self._image_bytes = image_bytes  # Store raw bytes
         self.filmURL = filmURL
         self.releaseDate = releaseDate
         self.runtime = runtime
@@ -150,6 +152,12 @@ class Film:
         self.location = location
         self.sessions = sessions if sessions is not None else []
         self.trailerLink = trailerLink
+
+    @property
+    def image(self) -> discord.File:
+        """Generates a fresh discord.File object from the stored bytes."""
+        # Create new BytesIO stream every time this is accessed
+        return discord.File(io.BytesIO(self._image_bytes), filename="movie-poster.jpg")
 
     def addSession(self, session: Session) -> None:
         session.film = self
@@ -221,7 +229,6 @@ def fetchShowtimes(chain: str, location: str) -> dict:
 
 
 def fetchTrailersForAll(films: list[Film]) -> None:
-    # Only need to fetch once
     url = "https://www.landmarkcinemas.com/umbraco/api/ListingApi/GetVideosOverview"
 
     params = {
@@ -248,11 +255,9 @@ def fetchTrailersForAll(films: list[Film]) -> None:
     if not items:
         return
 
-    # Build a list of titles + URLs for fuzzy search
     trailer_titles = [item["Title"] for item in items]
     trailer_urls = [f"https://www.landmarkcinemas.com{item['Url']}" for item in items]
 
-    # One fuzzy search per film, no API hits
     for film in films:
         if film.chain == "Landmark":
             candidates = text.fuzzySearch(
@@ -302,6 +307,8 @@ async def parseShowtimes(
                 rawImage,
                 "movie-poster.jpg",
             )
+            # Read bytes immediately and use them to init Film
+            imageBytes = imageFileObject.fp.read()
 
             filmURL = f"https://www.landmarkcinemas.com/film-info/{friendlyName}"
 
@@ -320,7 +327,7 @@ async def parseShowtimes(
                 name=rawName,
                 friendlyName=friendlyName,
                 ageRating=formattedRating,
-                image=imageFileObject,
+                image_bytes=imageBytes,  # Pass bytes here
                 filmURL=filmURL,
                 releaseDate=convertedReleaseDate,
                 runtime=rawRuntime,
@@ -334,7 +341,6 @@ async def parseShowtimes(
                 province=province,
             )
 
-            # PARSE SESSIONS
             for rawSessionData in rawFilmData["Sessions"]:
                 rawDate = rawSessionData["Date"]
 
@@ -345,11 +351,9 @@ async def parseShowtimes(
 
                 sessionObject = Session(date=convertedDate)
 
-                # PARSE EXPERIENCES
                 for rawExperience in rawSessionData["ExperienceTypes"]:
                     experienceObject = Experience()
 
-                    # PARSE EXPERIENCE ATTRIBUTES
                     for rawExperienceAttribute in sorted(
                         rawExperience["ExperienceAttributes"],
                         key=lambda a: (
@@ -378,7 +382,6 @@ async def parseShowtimes(
 
                         experienceObject.addExperienceAttribute(attributeObject)
 
-                    # PARSE EXPERIENCE TIMES
                     for rawExperienceTime in rawExperience["Times"]:
                         rawTime = rawExperienceTime["StartTime"]
                         convertedTime = dates.simpleDateObj(rawTime)
@@ -424,7 +427,7 @@ async def parseShowtimes(
 
 class MovieDetailsEmbedReply(EmbedReply):
     def __init__(self, film: Film):
-        title = f"Movie Showtimes - {text.truncateString(film.name, 200)[0]} - {film.chain} {film.location["location"]} 🔗↗️"
+        title = f"Movie Showtimes - {text.truncateString(film.name, 200)[0]} - {film.chain} {film.location['location']} 🔗↗️"
         commandName = "movies"
         description = text.truncateString(film.description, 2500)[0]
         url = film.filmURL
@@ -441,167 +444,123 @@ class MovieDetailsEmbedReply(EmbedReply):
         )
 
         self.add_field(name="Directed By", value=film.director)
-
         self.add_field(name="Cast", value=film.cast)
 
 
-class MovieSelectionView(discord.ui.View):
-    def __init__(self, films: list[Film], preSelectedDate: datetime.date):
-        super().__init__(timeout=SELECTION_TIMEOUT)
+# ==========================================
+# NEW DASHBOARD ARCHITECTURE
+# ==========================================
 
-        self.message: discord.WebhookMessage = None
 
-        # Create the select menu options
-        options = []
+def build_dashboard_embed(film: Film, selectedDate: datetime.date) -> EmbedReply:
+    """Helper to generate the embed for any film/date combo."""
+    reply = MovieDetailsEmbedReply(film)
 
-        for film in films:
-            options.append(
-                discord.SelectOption(
-                    label=text.truncateString(film.name, 100)[0],
-                    description=text.truncateString(
-                        f"Next Show: {dates.formatSimpleDate(film.sessions[0].date, includeTime=False)} · Release: {dates.formatSimpleDate(film.releaseDate, includeTime=False)} · Runtime: {film.formatRuntime()}",
-                        100,
-                    )[0],
-                    value=str(film.id),
-                )
+    # Experience List
+    reply.add_field(
+        name="Available Experiences",
+        value=" ".join(film.allAvailableExperienceDisplays()),
+        inline=False,
+    )
+
+    # Find the session for the selected date
+    try:
+        selectedSession = next(filter(lambda s: s.date == selectedDate, film.sessions))
+
+        for idx, experience in enumerate(selectedSession.experiences, start=1):
+            name = f"Experience {idx} {experience.getMostProminentAttributeName()}"
+            times = [
+                f"— {dates.formatSimpleDate(time.time, discordDateFormat='t')} · {time.screen.title()}"
+                for time in experience.times
+            ]
+            reply.add_field(
+                name=name,
+                value=f"{' '.join(experience.listExperienceDisplays())}\n{text.truncateString('\n'.join(times), 1000)[0]}",
+                inline=False,
             )
-
-        # Add the Select menu to the view
-        self.add_item(
-            MovieSelect(options=options, films=films, preSelectedDate=preSelectedDate)
-        )
-
-    async def on_timeout(self):
-        reply = EmbedReply(
-            "Movie Showtimes - Select A Movie - Timed Out",
-            "movies",
-            True,
-            description="Movie selection timed out. Please retry this command.",
-        )
-
-        reply.set_thumbnail(url="attachment://cinema-logo.jpg")
-
-        try:
-            if self.message:
-                await self.message.edit(embed=reply, view=None)
-        except discord.NotFound:
-            pass  # message already deleted/edited elsewhere
-
-
-class MovieSelect(discord.ui.Select):
-    def __init__(
-        self,
-        options: list[discord.SelectOption],
-        films: list[Film],
-        preSelectedDate: datetime.date,
-    ):
-        # Save all films for later use
-        self.preSelectedDate = preSelectedDate
-        self.allFilms = films
-        super().__init__(placeholder="Select a movie...", options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        selectedFilmID = int(self.values[0])
-
-        selectedFilm = next(f for f in self.allFilms if f.id == selectedFilmID)
-
-        self.view.stop()
-
-        dateView = DateSelectView(
-            film=selectedFilm,
-            films=self.allFilms,
-            message=self.view.message,
-            preSelectedDate=self.preSelectedDate,
-        )
-
-        reply = MovieDetailsEmbedReply(selectedFilm)
-
-        allAvailableExperienceDisplays = selectedFilm.allAvailableExperienceDisplays()
-
+    except StopIteration:
         reply.add_field(
-            name="Available Experiences",
-            value=" ".join(allAvailableExperienceDisplays),
+            name="No Showtimes",
+            value=f"No showtimes found for {dates.formatSimpleDate(selectedDate, includeTime=False)}.",
             inline=False,
         )
 
-        if self.preSelectedDate:
-            try:
-                selectedSession = next(
-                    filter(
-                        lambda s: s.date == self.preSelectedDate,
-                        selectedFilm.sessions,
-                    )
-                )
-
-                # Add showtime fields for the pre-selected date
-                for idx, experience in enumerate(selectedSession.experiences, start=1):
-                    name = (
-                        f"Experience {idx} {experience.getMostProminentAttributeName()}"
-                    )
-
-                    times = [
-                        f"— {dates.formatSimpleDate(time.time, discordDateFormat='t')} · {time.screen.title()}"
-                        for time in experience.times
-                    ]
-
-                    reply.add_field(
-                        name=name,
-                        value=f"{' '.join(experience.listExperienceDisplays())}\n{text.truncateString('\n'.join(times), 1000)[0]}",
-                        inline=False,
-                    )
-            except StopIteration:
-                # Should not happen if data is valid, but if it does,
-                # just proceed without adding showtimes.
-                pass
-        # --- END NEW LOGIC ---
-
-        # Edit the original message with the new embed (now with showtimes)
-        # and the new view.
-        await interaction.response.edit_message(
-            embed=reply, view=dateView, file=selectedFilm.image
-        )
+    return reply
 
 
-class DateSelectView(discord.ui.View):
+class DashboardView(discord.ui.View):
+    """
+    The master view that holds both the Movie dropdown and the Date dropdown.
+    Allows changing either 'on the fly'.
+    """
+
     def __init__(
         self,
-        film: Film,
-        films: list[Film],
-        message: discord.WebhookMessage,
-        preSelectedDate: datetime.date | None,
+        current_film: Film,
+        all_films: list[Film],
+        current_date: datetime.date,
+        message: discord.WebhookMessage = None,
     ):
         super().__init__(timeout=SELECTION_TIMEOUT)
-        self.film = film
-        self.films = films
+        self.current_film = current_film
+        self.all_films = all_films
+        self.current_date = current_date
         self.message = message
-        self.preSelectedDate = preSelectedDate
 
-        # date picker
-        dateOptions = []
-        for session in film.sessions:
-            dateOptions.append(
+        self.populate_components()
+
+    def populate_components(self):
+        """Clears and rebuilds the dropdowns and buttons based on current state."""
+        self.clear_items()
+
+        # 1. Movie Selector (Row 0)
+        movie_options = []
+        for film in self.all_films:
+            movie_options.append(
+                discord.SelectOption(
+                    label=text.truncateString(film.name, 100)[0],
+                    # Short description to help identify
+                    description=text.truncateString(
+                        f"Runtime: {film.formatRuntime()}", 100
+                    )[0],
+                    value=str(film.id),
+                    default=(film.id == self.current_film.id),
+                )
+            )
+        self.add_item(DashboardMovieSelect(movie_options))
+
+        # 2. Date Selector (Row 1)
+        # Only show dates that actually have sessions for the *current* film
+        date_options = []
+        sessions_sorted = sorted(self.current_film.sessions, key=lambda s: s.date)
+
+        for session in sessions_sorted:
+            date_options.append(
                 discord.SelectOption(
                     label=dates.formatSimpleDate(
                         session.date, includeTime=False, relativity=True, weekday=True
                     ),
                     value=session.date.isoformat(),
-                    # This default flag is set based on the passed date
-                    default=(
-                        session.date == self.preSelectedDate
-                        if self.preSelectedDate
-                        else False
-                    ),
+                    default=(session.date == self.current_date),
                 )
             )
 
-        selectItem = DateSelect(dateOptions, film, message)
-        self.add_item(selectItem)
+        # Fallback if somehow current date isn't in sessions (shouldn't happen via logic, but safe)
+        if not date_options:
+            date_options.append(
+                discord.SelectOption(label="No Dates Available", value="none")
+            )
 
-        if film.chain == "Landmark":
-            self.add_item(OpenLink("Get Tickets", link=film.filmURL))
+        self.add_item(DashboardDateSelect(date_options))
 
-            if film.trailerLink:
-                self.add_item(OpenLink("View Movie Trailer", link=film.trailerLink))
+        # 3. External Links (Row 2)
+        if self.current_film.chain == "Landmark":
+            self.add_item(OpenLink("Get Tickets", link=self.current_film.filmURL))
+
+            if self.current_film.trailerLink:
+                self.add_item(
+                    OpenLink("View Movie Trailer", link=self.current_film.trailerLink)
+                )
             else:
                 self.add_item(
                     OpenLink(
@@ -610,8 +569,18 @@ class DateSelectView(discord.ui.View):
                     )
                 )
 
-        # The initDate() call is no longer needed here, as the logic
-        # is now handled in MovieSelect.callback before this view is sent.
+    async def update_view(self, interaction: discord.Interaction):
+        """Updates the message with the new Embed and View state."""
+        # Re-generate items to ensure 'default' ticks are correct
+        self.populate_components()
+
+        embed = build_dashboard_embed(self.current_film, self.current_date)
+
+        # We must re-attach the file because editing a message usually invalidates
+        # previous `attachment://` references. accessing .image property creates a FRESH file.
+        await interaction.response.edit_message(
+            embed=embed, view=self, file=self.current_film.image
+        )
 
     async def on_timeout(self):
         try:
@@ -619,86 +588,137 @@ class DateSelectView(discord.ui.View):
                 self.disable_all_items()
                 await self.message.edit(view=self)
         except discord.NotFound:
-            pass  # message already deleted/edited elsewhere
+            pass
 
 
-class DateSelect(discord.ui.Select):
-    def __init__(
-        self,
-        options: list[discord.SelectOption],
-        film: Film,
-        message: discord.WebhookMessage,
-    ):
-        self.film = film
-        self.message = message
-        super().__init__(placeholder="Select a date...", options=options)
+class DashboardMovieSelect(discord.ui.Select):
+    def __init__(self, options):
+        # We assume the parent View has .all_films
+        super().__init__(
+            placeholder="Select a different movie...", options=options, row=0
+        )
 
     async def callback(self, interaction: discord.Interaction):
-        selectedDateStr = self.values[0]
-        selectedDate = dates.simpleDateObj(selectedDateStr).date()
+        view: DashboardView = self.view
+        selected_id = int(self.values[0])
 
-        for opt in self.options:
-            opt.default = opt.value == selectedDateStr
+        # 1. Update the Current Film
+        new_film = next((f for f in view.all_films if f.id == selected_id), None)
+        if new_film:
+            view.current_film = new_film
 
-        self.view.preSelectedDate = selectedDate
+            # 2. Intellectually update the Date
+            # If the new movie has a session on the currently selected date, keep it.
+            # Otherwise, default to the new movie's first available date.
+            available_dates = [s.date for s in new_film.sessions]
+            if view.current_date not in available_dates:
+                if available_dates:
+                    view.current_date = min(available_dates)  # Closest/First date
+                # else: keep current_date, it'll just show "No showtimes" in embed
 
-        reply = MovieDetailsEmbedReply(self.film)
+        await view.update_view(interaction)
 
-        reply.add_field(
-            name="Available Experiences",
-            value=" ".join(self.film.allAvailableExperienceDisplays()),
-            inline=False,
+
+class DashboardDateSelect(discord.ui.Select):
+    def __init__(self, options):
+        super().__init__(placeholder="Select a date...", options=options, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        view: DashboardView = self.view
+        val = self.values[0]
+
+        if val != "none":
+            # Update Current Date
+            view.current_date = dates.simpleDateObj(val).date()
+
+        await view.update_view(interaction)
+
+
+# ==========================================
+# INITIAL SELECTION VIEW
+# ==========================================
+
+
+class MovieSelectionView(discord.ui.View):
+    """
+    The initial view shown when /movies showtimes is called.
+    Allows the user to pick the FIRST movie.
+    """
+
+    def __init__(self, films: list[Film], preSelectedDate: datetime.date):
+        super().__init__(timeout=SELECTION_TIMEOUT)
+        self.films = films
+        self.preSelectedDate = preSelectedDate
+        self.message: discord.WebhookMessage = None
+
+        options = []
+        for film in films:
+            options.append(
+                discord.SelectOption(
+                    label=text.truncateString(film.name, 100)[0],
+                    description=text.truncateString(
+                        f"Next: {dates.formatSimpleDate(film.sessions[0].date, includeTime=False)}",
+                        100,
+                    )[0],
+                    value=str(film.id),
+                )
+            )
+
+        self.add_item(InitialMovieSelect(options=options))
+
+    async def on_timeout(self):
+        # Standard timeout logic for the initial menu
+        reply = EmbedReply(
+            "Movie Showtimes - Timed Out",
+            "movies",
+            True,
+            description="Movie selection timed out. Please retry this command.",
+        )
+        reply.set_thumbnail(url="attachment://cinema-logo.jpg")
+        try:
+            if self.message:
+                await self.message.edit(embed=reply, view=None)
+        except discord.NotFound:
+            pass
+
+
+class InitialMovieSelect(discord.ui.Select):
+    def __init__(self, options: list[discord.SelectOption]):
+        super().__init__(placeholder="Select a movie...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        view: MovieSelectionView = self.view
+        selectedFilmID = int(self.values[0])
+        selectedFilm = next(f for f in view.films if f.id == selectedFilmID)
+
+        # Stop the initial view
+        view.stop()
+
+        # Determine initial date
+        # If user pre-selected a date in the slash command AND the movie has it: use it.
+        # Otherwise: use the movie's first available date.
+        initial_date = None
+        available_dates = [s.date for s in selectedFilm.sessions]
+
+        if view.preSelectedDate and view.preSelectedDate in available_dates:
+            initial_date = view.preSelectedDate
+        elif available_dates:
+            initial_date = min(available_dates)
+        else:
+            initial_date = datetime.date.today()  # Fallback
+
+        # Create the Master Dashboard View
+        dashboard_view = DashboardView(
+            current_film=selectedFilm,
+            all_films=view.films,
+            current_date=initial_date,
+            message=view.message,
         )
 
-        selectedSession = next(
-            filter(
-                lambda s: s.date == selectedDate,
-                self.film.sessions,
-            )
+        embed = build_dashboard_embed(selectedFilm, initial_date)
+
+        await interaction.response.edit_message(
+            embed=embed,
+            view=dashboard_view,
+            file=selectedFilm.image,  # Accessing property creates NEW file
         )
-
-        for idx, experience in enumerate(selectedSession.experiences, start=1):
-            name = f"Experience {idx} {experience.getMostProminentAttributeName()}"
-
-            times = [
-                f"— {dates.formatSimpleDate(time.time, discordDateFormat='t')} · {time.screen.title()}"
-                for time in experience.times
-            ]
-
-            reply.add_field(
-                name=name,
-                value=f"{' '.join(experience.listExperienceDisplays())}\n{text.truncateString('\n'.join(times), 1000)[0]}",
-                inline=False,
-            )
-
-        # Edit message but DO NOT replace the view instance
-        await interaction.response.edit_message(embed=reply, view=self.view)
-
-
-class SeatMap:
-    def __init__(self):
-        pass
-
-
-class SeatArea:
-    def __init__(self):
-        pass
-
-
-class SeatRow:
-    def __init__(self):
-        pass
-
-
-class SeatGroup:
-    def __init__(self):
-        pass
-
-
-class Seat:
-    def __init__(self):
-        pass
-
-
-def fetchSeatMap(cinemaID: int, sessionID: int):
-    pass
