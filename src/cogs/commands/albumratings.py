@@ -357,7 +357,7 @@ class AlbumRatings(commands.Cog):
                     description=str(e),
                 )
 
-                await reply.send(ctx, ephemeral=True)
+                await reply.send(ctx, ephemeral=False)
 
                 break
         else:
@@ -370,7 +370,7 @@ class AlbumRatings(commands.Cog):
                 description="The Spotify API seems to be having issues right now.\n\nPlease try again later.",
             )
 
-            await reply.send(ctx, ephemeral=True)
+            await reply.send(ctx, ephemeral=False)
 
     @albumRatings.command(
         description="View an album rating (by Rating ID).",
@@ -397,7 +397,7 @@ class AlbumRatings(commands.Cog):
         ephemeral: discord.Option(
             bool,
             description="By default, the rating will only be viewable by you. Set to False to send as a chat reply.",
-            default=True,
+            default=False,
         ),  # type: ignore
     ):
         try:
@@ -469,7 +469,7 @@ class AlbumRatings(commands.Cog):
                     description=f"Successfully retrieved rating for {unpackedRating.name}. ✅\n\nView here: {ratingMessageReference.jump_url}",
                 )
 
-                await reply.send(ctx, ephemeral=True)
+                await reply.send(ctx, ephemeral=False)
             else:
                 await albumRatingEmbed.send(ctx, ephemeral=ephemeral)
         except Exception as e:
@@ -477,7 +477,7 @@ class AlbumRatings(commands.Cog):
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
 
-            await reply.send(ctx, ephemeral=True)
+            await reply.send(ctx, ephemeral=False)
 
     @albumRatings.command(
         description="OWNER ONLY: Reassign an album rating to a new user (by Rating ID).",
@@ -589,7 +589,7 @@ class AlbumRatings(commands.Cog):
                 description=str(e),
             )
 
-            await reply.send(ctx, ephemeral=True)
+            await reply.send(ctx, ephemeral=False)
 
     @list_ratings.command(
         description="List album ratings (by Search Term [artist or album_name]).",
@@ -657,7 +657,7 @@ class AlbumRatings(commands.Cog):
                 description=str(e),
             )
 
-            await reply.send(ctx, ephemeral=True)
+            await reply.send(ctx, ephemeral=False)
 
     @list_ratings.command(
         description="List album ratings (by Member).", guild_ids=[799341195109203998]
@@ -731,7 +731,7 @@ class AlbumRatings(commands.Cog):
                 description=str(e),
             )
 
-            await reply.send(ctx, ephemeral=True)
+            await reply.send(ctx, ephemeral=False)
 
     @list_ratings.command(
         description="List the top album ratings for a member",
@@ -803,7 +803,7 @@ class AlbumRatings(commands.Cog):
                 description=str(e),
             )
 
-            await reply.send(ctx, ephemeral=True)
+            await reply.send(ctx, ephemeral=False)
 
     @albumRatings.command(
         description="Edit an album rating (by Rating ID).",
@@ -991,7 +991,7 @@ class AlbumRatings(commands.Cog):
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
 
-            await reply.send(ctx, ephemeral=True)
+            await reply.send(ctx, ephemeral=False)
 
     async def _albumrating_edit_core(
         self,
@@ -1259,13 +1259,13 @@ class AlbumRatings(commands.Cog):
                 description=f"Album rating date changed. ✅\n\nOld Date: {dates.formatSimpleDate(oldDate, discordDateFormat="f")}\nNew Date: {dates.formatSimpleDate(newDate, discordDateFormat="f")}\n\nView rating: {ratingMessageReference.jump_url}{oldMessageNotFoundWarning}",
             )
 
-            await savedReply.send(ctx, ephemeral=True)
+            await savedReply.send(ctx, ephemeral=False)
         except Exception as e:
             reply = EmbedReply(
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
 
-            await reply.send(ctx, ephemeral=True)
+            await reply.send(ctx, ephemeral=False)
 
     @albumRatings.command(
         description="Delete an album rating (by Rating ID).",
@@ -1388,7 +1388,7 @@ class AlbumRatings(commands.Cog):
                 "Album Ratings - Error", "albumratings", True, description=str(e)
             )
 
-            await reply.send(ctx, ephemeral=True)
+            await reply.send(ctx, ephemeral=False)
 
     @albumRatings.command(
         description="Update the persistent buttons on all ratings. (OWNER ONLY)",
