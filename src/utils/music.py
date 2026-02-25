@@ -868,7 +868,7 @@ class TrackRatingEmbedReply(EmbedReply):
         )
 
         self.set_author(
-            name=track.album.createdBy.global_name,
+            name=track.album.createdBy.global_name or track.album.createdBy.name,
             icon_url=track.album.createdBy.display_avatar.url,
         )
 
