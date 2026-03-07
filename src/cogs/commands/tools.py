@@ -69,9 +69,7 @@ class ShortenURLCommands(commands.Cog):
             )
 
             replyView = discord.ui.View(
-                OpenLink(
-                    "View Short Links (Tailscale Only)", "https://links.brendenian.net"
-                ),
+                OpenLink("Edit Short Links", "https://links.brendenian.net"),
                 timeout=None,
             )
 
@@ -113,9 +111,7 @@ class ShortenURLCommands(commands.Cog):
             )
 
             replyView = discord.ui.View(
-                OpenLink(
-                    "View Short Links (Tailscale Only)", "https://links.brendenian.net"
-                ),
+                OpenLink("Edit Short Links", "https://links.brendenian.net"),
                 timeout=None,
             )
 
