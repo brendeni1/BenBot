@@ -519,9 +519,9 @@ class DashboardView(discord.ui.View):
             movie_options.append(
                 discord.SelectOption(
                     label=text.truncateString(film.name, 100)[0],
-                    # Short description to help identify
                     description=text.truncateString(
-                        f"Runtime: {film.formatRuntime()}", 100
+                        f"Next: {dates.formatSimpleDate(film.releaseDate, includeTime=False)} · Runtime: {film.formatRuntime()}",
+                        100,
                     )[0],
                     value=str(film.id),
                     default=(film.id == self.current_film.id),
@@ -657,7 +657,7 @@ class MovieSelectionView(discord.ui.View):
                 discord.SelectOption(
                     label=text.truncateString(film.name, 100)[0],
                     description=text.truncateString(
-                        f"Next: {dates.formatSimpleDate(film.sessions[0].date, includeTime=False)}",
+                        f"Next: {dates.formatSimpleDate(film.sessions[0].date, includeTime=False)} · Runtime: {film.formatRuntime()}",
                         100,
                     )[0],
                     value=str(film.id),
