@@ -3,6 +3,7 @@ import sys
 from discord.ext import commands
 
 from src.classes import *
+from src.errors import is_under_construction
 
 
 class Users(commands.Cog):
@@ -16,6 +17,7 @@ class Users(commands.Cog):
     @discord.slash_command(
         description="Get a user's avatar.", guild_ids=[799341195109203998]
     )
+    @is_under_construction()
     async def avatar(
         self,
         ctx: discord.ApplicationContext,

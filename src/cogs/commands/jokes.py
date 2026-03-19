@@ -8,6 +8,7 @@ from discord.ext import commands
 
 from src.utils import regexs
 from src.utils import dates
+from src.errors import is_under_construction
 
 from src.classes import *
 
@@ -118,7 +119,9 @@ class Jokes(commands.Cog):
             jokeExpense,
         ) = joke
 
-        jokeCreatedAt = dates.formatSimpleDate(timestamp=jokeCreatedAt, discordDateFormat="f")
+        jokeCreatedAt = dates.formatSimpleDate(
+            timestamp=jokeCreatedAt, discordDateFormat="f"
+        )
         jokeCreatedBy = await self.bot.get_or_fetch_user(jokeCreatedBy)
 
         initialReply.description = f"<:sus:816524395605786624> {jokeSetup}"
@@ -158,13 +161,11 @@ class Jokes(commands.Cog):
             "jokes",
             description=f"<:joshrad:801246993682137108> {jokePunchline}",
         )
-        
+
         punchlineReply.add_field(name="Joke Author", value=jokeCreatedBy.mention)
         punchlineReply.add_field(name="Joke Created", value=jokeCreatedAt)
-        
-        punchlineReply.set_footer(
-            text=f"Joke ID: {jokeID}"
-        )
+
+        punchlineReply.set_footer(text=f"Joke ID: {jokeID}")
 
         try:
             await self.bot.wait_for("message", check=check, timeout=self.timeout)

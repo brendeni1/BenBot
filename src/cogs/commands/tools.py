@@ -4,6 +4,7 @@ from discord.ext import commands
 
 from src.classes import *
 from src.utils import tools
+from src.errors import is_under_construction
 
 
 class ShortenURLCommands(commands.Cog):

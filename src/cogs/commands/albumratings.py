@@ -3,6 +3,7 @@ import requests
 import asyncio
 import sys
 from discord.ext import commands, pages
+from src.errors import is_under_construction
 
 from src.classes import *
 from src.utils import music

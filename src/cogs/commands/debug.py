@@ -8,6 +8,7 @@ from src.utils import dates
 from src.cogs.events import messageReplies
 
 from src.classes import *
+from src.errors import is_under_construction
 
 
 class Debug(commands.Cog):

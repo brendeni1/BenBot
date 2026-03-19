@@ -2,6 +2,7 @@ import discord
 import sys
 from discord.ext import commands
 from src.utils.logging import messageLogs
+from src.errors import is_under_construction
 
 from src.classes import *
 

@@ -5,6 +5,8 @@ import sys
 from discord.ext import commands
 
 from src.classes import *
+from src.errors import *
+from src import constants
 
 SINGLETON_REPLIES = {
     r"\bwe\b": ['"we" 🥀', "https://i.breia.net/DBYjGFHE.gif"],
@@ -88,6 +90,24 @@ class SingletonRepliesCog(commands.Cog):
 
             if concatenatedReply:
                 await msg.reply(content=concatenatedReply)
+
+
+class CommandUnderConstructionCatcher(commands.Cog):
+    ISCOG = True
+
+    def __init__(self, bot):
+        self.bot: discord.Bot = bot
+
+        self.description = "Replies to people when a command is under construction."
+
+    @commands.Cog.listener()
+    async def on_application_command_error(
+        self, ctx: discord.ApplicationContext, e: discord.DiscordException
+    ):
+        if isinstance(e, CommandUnderConstruction):
+            reply = constants.UNDER_CONSTRUCTION
+
+            await reply.send(ctx)
 
 
 def setup(bot):

@@ -5,6 +5,7 @@ from discord.ext import commands
 from src.classes import *
 from src import constants
 from src.utils import stats
+from src.errors import is_under_construction
 
 LEADERBOARD_AMOUNT = 10
 

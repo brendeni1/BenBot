@@ -1,3 +1,5 @@
+from src.classes import EmbedReply
+
 DEFAULT_IMAGE = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQxsTcVDHm4n830jTn_4vnXiRJY-EzSJ2KprQ&s"
 
 STORAGE_CHANNEL_ID = 1451968436006813728
@@ -164,3 +166,10 @@ MOVIE_EXPERIENCE_ATTRIBUTE_ORDER_OVERRIDES = [
 ]
 
 UNICODE_WHITESPACE = {"2": "\u2002", "4": "\u2003"}
+
+UNDER_CONSTRUCTION = EmbedReply(
+    "🚧🏗️Command Under Construction👷🛠️",
+    "None",
+    True,
+    url="https://i.breia.net/V6DVc85F.mp4",
+).set_image(url="https://i.breia.net/ph7sELj9.png")

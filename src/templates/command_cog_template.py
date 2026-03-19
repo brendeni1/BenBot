@@ -1,6 +1,7 @@
 import discord
 import sys
 from discord.ext import commands
+from src.errors import is_under_construction
 
 from src.classes import *
 
@@ -16,6 +17,7 @@ class MyCog(commands.Cog):
     @discord.slash_command(
         description="Template for commands.", guild_ids=[799341195109203998]
     )
+    @is_under_construction()
     async def command(self, ctx: discord.ApplicationContext):
         await ctx.defer()
 
