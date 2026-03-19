@@ -17,7 +17,7 @@ class Users(commands.Cog):
     @discord.slash_command(
         description="Get a user's avatar.", guild_ids=[799341195109203998]
     )
-    @is_under_construction()
+    # @is_under_construction()
     async def avatar(
         self,
         ctx: discord.ApplicationContext,
