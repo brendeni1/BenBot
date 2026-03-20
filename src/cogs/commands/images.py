@@ -5,7 +5,7 @@ from discord.ext import commands
 
 from src.classes import *
 from src.utils import imagesCog, images, text, dates
-from src.errors import is_under_construction
+from src.errors import *
 
 MIN_IMAGE_DESCRIPTION_LENGTH = 2
 MAX_IMAGE_DESCRIPTION_LENGTH = 3500

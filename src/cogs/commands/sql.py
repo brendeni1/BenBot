@@ -5,7 +5,7 @@ import sys
 
 from src.utils import dates
 from src.utils import db
-from src.errors import is_under_construction
+from src.errors import *
 
 from src.classes import *
 
@@ -52,6 +52,7 @@ class Sql(commands.Cog):
     @discord.slash_command(
         description="Run a SQL command on a database.", guild_ids=[799341195109203998]
     )
+    @is_owner_only()
     async def sql(
         self,
         ctx: discord.ApplicationContext,
@@ -73,9 +74,6 @@ class Sql(commands.Cog):
         ),  # type: ignore
     ):
         try:
-            if not await self.bot.is_owner(ctx.user):
-                raise Exception("This command is for the bot owner only.")
-
             databaseConnection: LocalDatabase = LocalDatabase(database)
 
             if action == "get":

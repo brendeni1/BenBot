@@ -3,7 +3,7 @@ import sys
 from discord.ext import commands
 
 from src.classes import *
-from src.errors import is_under_construction
+from src.errors import *
 
 
 class Users(commands.Cog):

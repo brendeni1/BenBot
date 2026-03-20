@@ -3,7 +3,7 @@ import requests
 import asyncio
 import sys
 from discord.ext import commands, pages
-from src.errors import is_under_construction
+from src.errors import *
 
 from src.classes import *
 from src.utils import music
@@ -484,17 +484,13 @@ class AlbumRatings(commands.Cog):
         description="OWNER ONLY: Reassign an album rating to a new user (by Rating ID).",
         guild_ids=[799341195109203998],
     )
+    @is_owner_only()
     async def changerater(
         self,
         ctx: discord.ApplicationContext,
         id: str,
         new: discord.Option(discord.Member),  # type: ignore
     ):
-        if not await self.bot.is_owner(ctx.user):
-            await ctx.send_response("piss off")
-
-            return
-
         msg = await ctx.send_response("done")
 
         database = LocalDatabase()
@@ -1395,6 +1391,7 @@ class AlbumRatings(commands.Cog):
         description="Update the persistent buttons on all ratings. (OWNER ONLY)",
         guild_ids=[799341195109203998],
     )
+    @is_owner_only()
     async def updateviews(
         self,
         ctx: discord.ApplicationContext,
@@ -1406,102 +1403,83 @@ class AlbumRatings(commands.Cog):
             max_value=60,
         ),  # type: ignore
     ):
-        if await self.bot.is_owner(ctx.user):
-            await ctx.defer()
+        await ctx.defer()
 
-            database = LocalDatabase()
+        database = LocalDatabase()
 
-            res = database.get("SELECT * FROM albumratings")
+        res = database.get("SELECT * FROM albumratings")
 
-            for i in res:
-                try:
-                    rating = music.SmallRating(i)
-                    ratingChannel = await self.bot.fetch_channel(RATING_CHANNEL)
+        for i in res:
+            try:
+                rating = music.SmallRating(i)
+                ratingChannel = await self.bot.fetch_channel(RATING_CHANNEL)
 
-                    targetMessage = await ratingChannel.fetch_message(
-                        rating.lastRelatedMessage
+                targetMessage = await ratingChannel.fetch_message(
+                    rating.lastRelatedMessage
+                )
+
+                await targetMessage.edit(
+                    view=music.FinishedRatingPersistentMessageButtonsView(
+                        f"https://open.spotify.com/album/{rating.spotifyAlbumID}",
                     )
+                )
 
-                    await targetMessage.edit(
-                        view=music.FinishedRatingPersistentMessageButtonsView(
-                            f"https://open.spotify.com/album/{rating.spotifyAlbumID}",
-                        )
-                    )
+                await asyncio.sleep(sleep_delay)
+            except discord.NotFound:
+                pass
 
-                    await asyncio.sleep(sleep_delay)
-                except discord.NotFound:
-                    pass
+        reply = EmbedReply(
+            "Album Ratings - Update Views",
+            "albumratings",
+            description="All ratings updated!",
+        )
 
-            reply = EmbedReply(
-                "Album Ratings - Update Views",
-                "albumratings",
-                description="All ratings updated!",
-            )
-
-            await reply.send(ctx)
-        else:
-            reply = EmbedReply(
-                "Album Ratings - Error",
-                "albumratings",
-                True,
-                description="You cannot use this command!",
-            )
-
-            await reply.send(ctx)
+        await reply.send(ctx)
 
     @albumRatings.command(
         description="Update the objects in the DB on all ratings. (OWNER ONLY)",
         guild_ids=[799341195109203998],
     )
+    @is_owner_only()
     async def updateallobjects(
         self,
         ctx: discord.ApplicationContext,
     ):
-        if await self.bot.is_owner(ctx.user):
-            await ctx.defer()
+        await ctx.defer()
 
-            # database = LocalDatabase()
+        # database = LocalDatabase()
 
-            # res = database.get("SELECT * FROM albumratings")
+        # res = database.get("SELECT * FROM albumratings")
 
-            # for i in res:
-            #     rating = music.SmallRating(i)
+        # for i in res:
+        #     rating = music.SmallRating(i)
 
-            #     unpackedRating = music.unpackAlbumRating(
-            #         self.bot, rating.serializedRating
-            #     )
+        #     unpackedRating = music.unpackAlbumRating(
+        #         self.bot, rating.serializedRating
+        #     )
 
-            #     unpackedRating.customCoverImage = None
+        #     unpackedRating.customCoverImage = None
 
-            #     packed = unpackedRating.packAlbumRating(
-            #         await self.bot.get_channel(RATING_CHANNEL).fetch_message(
-            #             rating.lastRelatedMessage
-            #         )
-            #     )
+        #     packed = unpackedRating.packAlbumRating(
+        #         await self.bot.get_channel(RATING_CHANNEL).fetch_message(
+        #             rating.lastRelatedMessage
+        #         )
+        #     )
 
-            #     database.setOne(
-            #         "UPDATE albumRatings SET serializedRating = ? WHERE ratingID = ?",
-            #         (packed.serializedRating, rating.ratingID),
-            #     )
+        #     database.setOne(
+        #         "UPDATE albumRatings SET serializedRating = ? WHERE ratingID = ?",
+        #         (packed.serializedRating, rating.ratingID),
+        #     )
 
-            #     await asyncio.sleep(0.1)
+        #     await asyncio.sleep(0.1)
 
-            reply = EmbedReply(
-                "Album Ratings - Update All Objects",
-                "albumratings",
-                description="All ratings updated!",
-            )
+        reply = EmbedReply(
+            "Album Ratings - Update All Objects",
+            "albumratings",
+            description="All ratings updated!",
+        )
 
-            await reply.send(ctx)
-        else:
-            reply = EmbedReply(
-                "Album Ratings - Update All Objects - Error",
-                "albumratings",
-                True,
-                description="You cannot use this command!",
-            )
-
-            await reply.send(ctx)
+        await reply.send(ctx)
 
 
 def setup(bot):

@@ -10,7 +10,7 @@ from src import constants
 from src.utils import movies
 from src.utils import images
 from src.utils import dates
-from src.errors import is_under_construction
+from src.errors import *
 
 DEFAULT_CHAIN = "Landmark"
 DEFAULT_PROVINCE = "ON"

@@ -2,7 +2,7 @@ import discord
 import random
 import sys
 from discord.ext import commands
-from src.errors import is_under_construction
+from src.errors import *
 
 from src.classes import *
 

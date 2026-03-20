@@ -92,20 +92,25 @@ class SingletonRepliesCog(commands.Cog):
                 await msg.reply(content=concatenatedReply)
 
 
-class CommandUnderConstructionCatcher(commands.Cog):
+class CommandRoleCatcher(commands.Cog):
     ISCOG = True
 
     def __init__(self, bot):
         self.bot: discord.Bot = bot
 
-        self.description = "Replies to people when a command is under construction."
+        self.description = "Replies to people when a command is restricted."
 
     @commands.Cog.listener()
     async def on_application_command_error(
         self, ctx: discord.ApplicationContext, e: discord.DiscordException
     ):
         if isinstance(e, CommandUnderConstruction):
-            reply = constants.UNDER_CONSTRUCTION
+            reply = constants.UNDER_CONSTRUCTION_EMBED
+
+            await reply.send(ctx)
+
+        if isinstance(e, CommandOwnerOnly):
+            reply = constants.OWNER_ONLY_EMBED
 
             await reply.send(ctx)
 

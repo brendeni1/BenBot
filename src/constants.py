@@ -167,9 +167,16 @@ MOVIE_EXPERIENCE_ATTRIBUTE_ORDER_OVERRIDES = [
 
 UNICODE_WHITESPACE = {"2": "\u2002", "4": "\u2003"}
 
-UNDER_CONSTRUCTION = EmbedReply(
-    "🚧🏗️Command Under Construction👷🛠️",
+UNDER_CONSTRUCTION_EMBED = EmbedReply(
+    "🚧🏗️ Command Under Construction 👷🛠️",
     "None",
     True,
     url="https://i.breia.net/V6DVc85F.mp4",
 ).set_image(url="https://i.breia.net/ph7sELj9.png")
+
+OWNER_ONLY_EMBED = EmbedReply(
+    "🛑🪪 Owner Only Command 🪪🛑",
+    "None",
+    True,
+    url="https://i.breia.net/aKS9yXVK.mp4",
+).set_image(url="https://i.breia.net/V6j1Qhqu.png")

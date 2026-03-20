@@ -6,7 +6,7 @@ import asyncio
 
 from src.utils import dates
 from src.utils import guild
-from src.errors import is_under_construction
+from src.errors import *
 
 from src.classes import *
 
