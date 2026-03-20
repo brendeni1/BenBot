@@ -766,7 +766,12 @@ class FavouriteButton(discord.ui.Button):
 
         for track in view.album.tracks:
             if track.getFavouriteIndex() == self.ranking:
-                track.setFavouriteIndex(None)
+                selfTrackRating = self.track.getFavouriteIndex()
+
+                if selfTrackRating:
+                    track.setFavouriteIndex(selfTrackRating)
+                else:
+                    track.setFavouriteIndex(None)
 
         self.track.setFavouriteIndex(self.ranking)
 
