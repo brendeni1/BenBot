@@ -2,7 +2,8 @@ import discord
 import requests
 import datetime
 import xmltodict
-import io  # Added for BytesIO
+import io
+import os
 
 from src.utils import dates
 from src.utils import text
@@ -12,12 +13,15 @@ from src import constants
 # Keep existing data classes
 from src.classes import *
 
+CINEPLEX_API_KEY = os.getenv("CINEPLEX_API_KEY")
+
 SELECTION_TIMEOUT = 890
 TRAILER_SEARCH_CUTOFF = 40.0
 TRAILER_SEARCH_INIT_AMOUNT = 250
 TRAILER_SEARCH_KEYWORDS = ""
 
 LANDMARK_LOGO = "https://i.breia.net/hIdg4zuf.jpg"
+CINEPLEX_LOGO = "https://i.breia.net/XcLCj1ub.png"
 
 EXCLUDED_LANDMARK_BULLSHIT = ["Mystery Movie", "Behind the Scenes"]
 
@@ -89,11 +93,13 @@ class Experience:
 
         return results
 
-    def getMostProminentAttributeName(self, emoji: bool = False) -> str:
+    def getMostProminentAttributeName(
+        self, emoji: bool = False, titleCase: bool = True
+    ) -> str:
         if self.attributes:
             selected = self.attributes[0]
 
-            return f"({selected.name.title() if not emoji else selected.getEmojiForAttribute()})"
+            return f"({selected.name.title() if titleCase else selected.name if not emoji else selected.getEmojiForAttribute()})"
         else:
             return ""
 
@@ -119,7 +125,6 @@ class Film:
         name: str,
         friendlyName: str,
         ageRating: str | None,
-        image_bytes: bytes,  # Changed from discord.File to bytes
         filmURL: str,
         releaseDate: datetime.datetime,
         runtime: int,
@@ -131,6 +136,8 @@ class Film:
         chain: str,
         province: str,
         location: dict,
+        image_bytes: bytes | None = None,  # Changed from discord.File to bytes
+        imageLink: str | None = None,
         sessions: list[Session] | None = None,
         trailerLink: str | None = None,
     ):
@@ -150,6 +157,7 @@ class Film:
         self.chain = chain
         self.province = province
         self.location = location
+        self.imageLink = imageLink
         self.sessions = sessions if sessions is not None else []
         self.trailerLink = trailerLink
 
@@ -157,7 +165,11 @@ class Film:
     def image(self) -> discord.File:
         """Generates a fresh discord.File object from the stored bytes."""
         # Create new BytesIO stream every time this is accessed
-        return discord.File(io.BytesIO(self._image_bytes), filename="movie-poster.jpg")
+        return (
+            discord.File(io.BytesIO(self._image_bytes), filename="movie-poster.jpg")
+            if self._image_bytes
+            else self.imageLink
+        )
 
     def addSession(self, session: Session) -> None:
         session.film = self
@@ -198,7 +210,12 @@ class Film:
             return f"{self.runtime} mins"
 
 
-def fetchShowtimes(chain: str, location: str) -> dict:
+def fetchShowtimes(
+    chain: str, location: str, startDate: datetime.datetime = datetime.datetime.now()
+) -> dict:
+    if not startDate:
+        startDate = datetime.datetime.now()
+
     if chain == "Landmark":
         url = "https://www.landmarkcinemas.com/Umbraco/Api/MovieApi/MoviesByCinema"
 
@@ -215,6 +232,27 @@ def fetchShowtimes(chain: str, location: str) -> dict:
             "Accept-Encoding": "gzip, deflate, br, zstd",
             "Referer": "https://www.landmarkcinemas.com/showtimes/windsor",
             "Cookie": "LMC_TheatreId=7802; LMC_TheatreURL=%2Fshowtimes%2Fwindsor; LMC_TheatreName=%2Fnow-playing%2Fwindsor",
+        }
+
+        response = requests.get(url=url, params=params, headers=headers)
+
+        response.raise_for_status()
+
+        parsedResponse = response.json()
+
+        return parsedResponse
+    elif chain == "Cineplex":
+        url = f"https://apis.cineplex.com/prod/cpx/theatrical/api/v1/showtimes"
+
+        parsedStartDate = dates.formatSimpleDate(
+            timestamp=startDate, formatString="%-m/%-d/%Y"
+        )
+
+        params = {"language": "en", "locationId": location, "date": parsedStartDate}
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+            "ocp-apim-subscription-key": CINEPLEX_API_KEY,
         }
 
         response = requests.get(url=url, params=params, headers=headers)
@@ -412,6 +450,121 @@ async def parseShowtimes(
                 continue
 
             parsed.append(filmObject)
+    elif chain == "Cineplex":
+        if not rawData:
+            raise Exception("No showtimes found for that date/movie.")
+
+        rawDataMovies = rawData[0].setdefault("dates", {})[0].get("movies", [])
+
+        for rawFilmData in sorted(
+            rawDataMovies,
+            key=lambda f: sum(
+                len(experience["sessions"]) for experience in f["experiences"]
+            ),
+            reverse=True,
+        ):
+
+            rawFilmID = rawFilmData.get("id", None)
+            rawName = rawFilmData.get("name", None)
+
+            friendlyName = rawFilmData.get("FriendlyName", "N/A")
+
+            rawRating = rawFilmData.get("localRating", "TBC")
+
+            formattedRating = rawRating if rawRating != "TBC" else None
+
+            rawImage = rawFilmData.get("largePosterImageUrl", CINEPLEX_LOGO)
+
+            filmURL = rawFilmData.get(
+                "deeplinkUrl", "https://www.cineplex.com/?openTM=true"
+            )
+
+            rawReleaseDate = None
+            convertedReleaseDate = (
+                dates.simpleDateObj(rawReleaseDate) if rawReleaseDate else None
+            )
+
+            rawRuntime = int(rawFilmData.get("runtimeInMinutes", 0))
+            genres = rawFilmData.get("genres", [])
+
+            rawDescription = (
+                "No Description/Genres" if not genres else ", ".join(genres)
+            )
+
+            rawCast = None
+            rawDirector = None
+            rawComingSoon = False
+            rawNowShowing = False
+
+            filmObject = Film(
+                id=rawFilmID,
+                name=rawName,
+                friendlyName=friendlyName,
+                ageRating=formattedRating,
+                imageLink=rawImage,
+                filmURL=filmURL,
+                releaseDate=convertedReleaseDate,
+                runtime=rawRuntime,
+                description=rawDescription,
+                cast=rawCast,
+                director=rawDirector,
+                isComingSoon=rawComingSoon,
+                isNowShowing=rawNowShowing,
+                chain=chain,
+                location=location,
+                province=province,
+            )
+
+            sessionDate = (
+                rawData[0]
+                .setdefault("dates", {})[0]
+                .get(
+                    "startDate",
+                )
+            )
+
+            sessionObject = Session(date=dates.simpleDateObj(sessionDate).date())
+
+            for rawExperiencesData in rawFilmData["experiences"]:
+                experienceObj = Experience()
+
+                for rawExperienceAttribute in rawExperiencesData["experienceTypes"]:
+                    customID = rawExperienceAttribute.lower().replace(" ", "-")
+
+                    experienceAttributeObj = ExperienceAttribute(
+                        id=rawExperienceAttribute,
+                        name=rawExperienceAttribute,
+                        description="No Description",
+                        precedence=1,
+                    )
+
+                    experienceObj.addExperienceAttribute(experienceAttributeObj)
+
+                for session in rawExperiencesData["sessions"]:
+                    soldOut = session.get("isSoldOut", False)
+                    expired = session.get("isInThePast", False)
+                    screen = session.get("auditorium", "Unknown Screen")
+                    id = session.get("vistaSessionId", False)
+                    time = session.get("showStartDateTime", None)
+
+                    experienceTimeObj = ExperienceTime(
+                        soldOut=soldOut,
+                        expired=expired,
+                        screen=screen,
+                        id=id,
+                        time=time,
+                    )
+
+                    experienceObj.addExperienceTime(experienceTimeObj)
+
+                sessionObject.addExperience(experienceObj)
+
+            filmObject.addSession(sessionObject)
+
+            if len(filmObject.sessions) < 1:
+                continue
+
+            parsed.append(filmObject)
     else:
         raise Exception("Invalid chain passed to parseShowtimes")
 
@@ -434,17 +587,22 @@ class MovieDetailsEmbedReply(EmbedReply):
 
         super().__init__(title, commandName, url=url, description=description)
 
-        self.set_thumbnail(url="attachment://movie-poster.jpg")
+        self.set_thumbnail(
+            url="attachment://movie-poster.jpg" if film._image_bytes else film.imageLink
+        )
         self.add_field(name="Age Rating", value=film.ageRating)
         self.add_field(name="Runtime", value=film.formatRuntime())
 
-        self.add_field(
-            name="Release Date",
-            value=dates.formatSimpleDate(film.releaseDate, discordDateFormat="D"),
-        )
+        if film.releaseDate:
+            self.add_field(
+                name="Release Date",
+                value=dates.formatSimpleDate(film.releaseDate, discordDateFormat="D"),
+            )
 
-        self.add_field(name="Directed By", value=film.director)
-        self.add_field(name="Cast", value=film.cast)
+        if film.director:
+            self.add_field(name="Directed By", value=film.director)
+        if film.cast:
+            self.add_field(name="Cast", value=film.cast)
 
 
 # ==========================================
@@ -468,7 +626,7 @@ def build_dashboard_embed(film: Film, selectedDate: datetime.date) -> EmbedReply
         selectedSession = next(filter(lambda s: s.date == selectedDate, film.sessions))
 
         for idx, experience in enumerate(selectedSession.experiences, start=1):
-            name = f"Experience {idx} {experience.getMostProminentAttributeName()}"
+            name = f"Experience {idx} {experience.getMostProminentAttributeName(titleCase=film.chain == "Landmark")}"
             times = [
                 f"— {dates.formatSimpleDate(time.time, discordDateFormat='t')} · {time.screen.title()}"
                 for time in experience.times
@@ -520,7 +678,7 @@ class DashboardView(discord.ui.View):
                 discord.SelectOption(
                     label=text.truncateString(film.name, 100)[0],
                     description=text.truncateString(
-                        f"Next: {dates.formatSimpleDate(film.releaseDate, includeTime=False)} · Runtime: {film.formatRuntime()}",
+                        f"Release: {dates.formatSimpleDate(film.releaseDate, includeTime=False) if film.releaseDate else "Unknown"} · Runtime: {film.formatRuntime()}",
                         100,
                     )[0],
                     value=str(film.id),
@@ -553,10 +711,10 @@ class DashboardView(discord.ui.View):
 
         self.add_item(DashboardDateSelect(date_options))
 
+        self.add_item(OpenLink("Get Tickets", link=self.current_film.filmURL))
+
         # 3. External Links (Row 2)
         if self.current_film.chain == "Landmark":
-            self.add_item(OpenLink("Get Tickets", link=self.current_film.filmURL))
-
             if self.current_film.trailerLink:
                 self.add_item(
                     OpenLink("View Movie Trailer", link=self.current_film.trailerLink)
@@ -579,7 +737,13 @@ class DashboardView(discord.ui.View):
         # We must re-attach the file because editing a message usually invalidates
         # previous `attachment://` references. accessing .image property creates a FRESH file.
         await interaction.response.edit_message(
-            embed=embed, view=self, file=self.current_film.image
+            embed=embed,
+            view=self,
+            file=(
+                self.current_film.image
+                if self.current_film._image_bytes
+                else discord.MISSING
+            ),
         )
 
     async def on_timeout(self):
@@ -674,7 +838,6 @@ class MovieSelectionView(discord.ui.View):
             True,
             description="Movie selection timed out. Please retry this command.",
         )
-        reply.set_thumbnail(url="attachment://cinema-logo.jpg")
         try:
             if self.message:
                 await self.message.edit(embed=reply, view=None)
@@ -720,5 +883,5 @@ class InitialMovieSelect(discord.ui.Select):
         await interaction.response.edit_message(
             embed=embed,
             view=dashboard_view,
-            file=selectedFilm.image,  # Accessing property creates NEW file
+            file=(selectedFilm.image if selectedFilm._image_bytes else discord.MISSING),
         )

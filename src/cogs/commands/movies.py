@@ -14,7 +14,7 @@ from src.errors import *
 
 DEFAULT_CHAIN = "Landmark"
 DEFAULT_PROVINCE = "ON"
-DEFAULT_LOCATION = "7802"  # Windsor
+DEFAULT_LOCATION = {"Landmark": "7802", "Cineplex": "7257"}
 
 SHOWTIME_DATE_QUERY_LIMIT = 3
 
@@ -34,6 +34,9 @@ async def chainAutocomplete(ctx):
 async def provinceAutocomplete(ctx: discord.AutocompleteContext):
     selectedChain = ctx.options.get("chain")
 
+    if not selectedChain:
+        return []
+
     provinces = list(constants.MOVIE_CINEMAS[selectedChain].keys())
     query = ctx.value.lower()
 
@@ -43,20 +46,20 @@ async def provinceAutocomplete(ctx: discord.AutocompleteContext):
 async def locationAutocomplete(ctx: discord.AutocompleteContext):
     chain = ctx.options.get("chain")
     province = ctx.options.get("province")
-
-    if not chain or chain not in constants.MOVIE_CINEMAS:
-        return []
-
-    if not province or province not in constants.MOVIE_CINEMAS[chain]:
-        return []
-
     query = ctx.value.lower()
 
-    return [
-        discord.OptionChoice(name=item["location"], value=item["id"])
-        for item in constants.MOVIE_CINEMAS[chain][province]
+    if not chain or not province:
+        return []
+
+    theatres = constants.MOVIE_CINEMAS.get(chain, {}).get(province, [])
+
+    choices = [
+        discord.OptionChoice(name=item["location"], value=str(item["id"]))
+        for item in theatres
         if query in item["location"].lower()
-    ][:25]
+    ]
+
+    return choices[:25]
 
 
 async def startDateAutocomplete(ctx: discord.AutocompleteContext):
@@ -97,6 +100,7 @@ class Movies(commands.Cog):
         description="View upcoming showtimes for movies.",
         guild_ids=[799341195109203998],
     )
+    @is_under_construction()
     async def showtimes(
         self,
         ctx: discord.ApplicationContext,
@@ -126,15 +130,15 @@ class Movies(commands.Cog):
         ),  # type: ignore
     ):
         try:
-            if any([chain, province, location]):
-                if not all([chain, province, location]):
+            if any([province, location]):
+                if not all([province, location]):
                     raise Exception(
-                        "If setting `chain`, `province`, or `location` manually, you must set all 3 explicitly!"
+                        "If setting `province` or `location` manually, you must set both explicitly!"
                     )
 
             chain: str = chain or DEFAULT_CHAIN
             province: str = province or DEFAULT_PROVINCE
-            location: str = location or DEFAULT_LOCATION
+            location: str = location or DEFAULT_LOCATION[chain]
 
             locationObj = next(
                 filter(
@@ -159,7 +163,7 @@ class Movies(commands.Cog):
             if start_date:
                 start_date = dates.simpleDateObj(start_date).date()
 
-            rawShowtimeData = movies.fetchShowtimes(chain, location)
+            rawShowtimeData = movies.fetchShowtimes(chain, location, start_date)
 
             parsedShowtimeData = (
                 await movies.parseShowtimes(
@@ -176,7 +180,15 @@ class Movies(commands.Cog):
                 )
 
                 reply.set_thumbnail(url=movies.LANDMARK_LOGO)
+            elif chain == "Cineplex":
+                reply = EmbedReply(
+                    "Movie Showtimes - Select A Movie",
+                    "movies",
+                    description="Select a movie from the dropdown below to view available showtimes.",
+                    url=f"https://www.cineplex.com/?openTM=true",
+                )
 
+                reply.set_thumbnail(url=movies.CINEPLEX_LOGO)
             else:
                 raise Exception("Invalid chain passed to showtimes.")
 

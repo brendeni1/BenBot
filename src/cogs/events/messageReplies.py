@@ -108,11 +108,12 @@ class CommandRoleCatcher(commands.Cog):
             reply = constants.UNDER_CONSTRUCTION_EMBED
 
             await reply.send(ctx)
-
-        if isinstance(e, CommandOwnerOnly):
+        elif isinstance(e, CommandOwnerOnly):
             reply = constants.OWNER_ONLY_EMBED
 
             await reply.send(ctx)
+        else:
+            raise e
 
 
 def setup(bot):
