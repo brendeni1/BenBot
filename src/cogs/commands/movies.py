@@ -163,7 +163,7 @@ class Movies(commands.Cog):
             if start_date:
                 start_date = dates.simpleDateObj(start_date).date()
 
-            rawShowtimeData = movies.fetchShowtimes(chain, location, start_date)
+            rawShowtimeData = await movies.fetchShowtimes(chain, location, start_date)
 
             parsedShowtimeData = (
                 await movies.parseShowtimes(

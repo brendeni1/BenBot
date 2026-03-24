@@ -1,5 +1,5 @@
 import discord
-import requests
+import aiohttp
 import datetime
 import xmltodict
 import io
@@ -12,6 +12,24 @@ from src import constants
 
 # Keep existing data classes
 from src.classes import *
+
+LANDMARK_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "en-CA,en;q=0.5",
+    "Cache-Control": "max-age=0",
+    "Dnt": "1",
+    "Priority": "u=0, i",
+    "Sec-Ch-Ua": '"Chromium";v="146", "Not-A.Brand";v="24", "Brave";v="146"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Sec-Gpc": "1",
+    "Upgrade-Insecure-Requests": "1",
+}
 
 CINEPLEX_API_KEY = os.getenv("CINEPLEX_API_KEY")
 
@@ -210,63 +228,52 @@ class Film:
             return f"{self.runtime} mins"
 
 
-def fetchShowtimes(
+async def fetchShowtimes(
     chain: str, location: str, startDate: datetime.datetime = datetime.datetime.now()
 ) -> dict:
     if not startDate:
         startDate = datetime.datetime.now()
 
-    if chain == "Landmark":
-        url = "https://www.landmarkcinemas.com/Umbraco/Api/MovieApi/MoviesByCinema"
+    async with aiohttp.ClientSession() as session:
+        if chain == "Landmark":
+            url = "https://www.landmarkcinemas.com/Umbraco/Api/MovieApi/MoviesByCinema"
 
-        params = {
-            "cinemaId": location,
-            "splitByAttributes": "true",
-            "expandSessions": "true",
-        }
+            params = {
+                "cinemaId": location,
+                "splitByAttributes": "true",
+                "expandSessions": "true",
+            }
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Accept-Language": "en-CA,en;q=0.7",
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Referer": "https://www.landmarkcinemas.com/showtimes/windsor",
-            "Cookie": "LMC_TheatreId=7802; LMC_TheatreURL=%2Fshowtimes%2Fwindsor; LMC_TheatreName=%2Fnow-playing%2Fwindsor",
-        }
+            async with session.get(
+                url=url, params=params, headers=LANDMARK_HEADERS
+            ) as response:
+                response.raise_for_status()
+                parsedResponse = await response.json()
+                return parsedResponse
 
-        response = requests.get(url=url, params=params, headers=headers)
+        elif chain == "Cineplex":
+            url = f"https://apis.cineplex.com/prod/cpx/theatrical/api/v1/showtimes"
 
-        response.raise_for_status()
+            parsedStartDate = dates.formatSimpleDate(
+                timestamp=startDate, formatString="%-m/%-d/%Y"
+            )
 
-        parsedResponse = response.json()
+            params = {"language": "en", "locationId": location, "date": parsedStartDate}
 
-        return parsedResponse
-    elif chain == "Cineplex":
-        url = f"https://apis.cineplex.com/prod/cpx/theatrical/api/v1/showtimes"
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+                "ocp-apim-subscription-key": CINEPLEX_API_KEY,
+            }
 
-        parsedStartDate = dates.formatSimpleDate(
-            timestamp=startDate, formatString="%-m/%-d/%Y"
-        )
-
-        params = {"language": "en", "locationId": location, "date": parsedStartDate}
-
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
-            "ocp-apim-subscription-key": CINEPLEX_API_KEY,
-        }
-
-        response = requests.get(url=url, params=params, headers=headers)
-
-        response.raise_for_status()
-
-        parsedResponse = response.json()
-
-        return parsedResponse
-    else:
-        raise Exception("Invalid chain passed to fetchShowtimes")
+            async with session.get(url=url, params=params, headers=headers) as response:
+                response.raise_for_status()
+                parsedResponse = await response.json()
+                return parsedResponse
+        else:
+            raise Exception("Invalid chain passed to fetchShowtimes")
 
 
-def fetchTrailersForAll(films: list[Film]) -> None:
+async def fetchTrailersForAll(films: list[Film]) -> None:
     url = "https://www.landmarkcinemas.com/umbraco/api/ListingApi/GetVideosOverview"
 
     params = {
@@ -275,19 +282,14 @@ def fetchTrailersForAll(films: list[Film]) -> None:
         "filterBy": "recent",
     }
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "en-CA,en;q=0.7",
-        "Accept-Encoding": "gzip, deflate, br, zstd",
-        "Referer": "https://www.landmarkcinemas.com/showtimes/windsor",
-        "Cookie": "LMC_TheatreId=7802; LMC_TheatreURL=%2Fshowtimes%2Fwindsor; LMC_TheatreName=%2Fnow-playing%2Fwindsor",
-    }
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            url=url, params=params, headers=LANDMARK_HEADERS
+        ) as response:
+            response.raise_for_status()
+            text_data = await response.text()
 
-    response = requests.get(url=url, params=params, headers=headers)
-    response.raise_for_status()
-
-    parsed = xmltodict.parse(response.text)
+    parsed = xmltodict.parse(text_data)
 
     items = parsed["TrailersListing"]["Items"]["TrailersListingItem"]
     if not items:
@@ -570,10 +572,10 @@ async def parseShowtimes(
 
     if len(parsed) < 1:
         raise Exception(
-            f"No films were found on or after {dates.formatSimpleDate(startDate if startDate else "Today", discordDateFormat="D")}."
+            f"No films were found on or after {dates.formatSimpleDate(startDate if startDate else 'Today', discordDateFormat='D')}."
         )
 
-    fetchTrailersForAll(parsed)
+    await fetchTrailersForAll(parsed)
 
     return parsed
 
@@ -626,7 +628,7 @@ def build_dashboard_embed(film: Film, selectedDate: datetime.date) -> EmbedReply
         selectedSession = next(filter(lambda s: s.date == selectedDate, film.sessions))
 
         for idx, experience in enumerate(selectedSession.experiences, start=1):
-            name = f"Experience {idx} {experience.getMostProminentAttributeName(titleCase=film.chain == "Landmark")}"
+            name = f"Experience {idx} {experience.getMostProminentAttributeName(titleCase=film.chain == 'Landmark')}"
             times = [
                 f"— {dates.formatSimpleDate(time.time, discordDateFormat='t')} · {time.screen.title()}"
                 for time in experience.times
@@ -678,7 +680,7 @@ class DashboardView(discord.ui.View):
                 discord.SelectOption(
                     label=text.truncateString(film.name, 100)[0],
                     description=text.truncateString(
-                        f"Release: {dates.formatSimpleDate(film.releaseDate, includeTime=False) if film.releaseDate else "Unknown"} · Runtime: {film.formatRuntime()}",
+                        f"Release: {dates.formatSimpleDate(film.releaseDate, includeTime=False) if film.releaseDate else 'Unknown'} · Runtime: {film.formatRuntime()}",
                         100,
                     )[0],
                     value=str(film.id),
