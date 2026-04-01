@@ -997,8 +997,16 @@ class AlbumRatings(commands.Cog):
         channel: discord.TextChannel,
         guild: discord.Guild,
         bot: discord.Bot,
+        original_message: discord.Message | None = None,
+        original_interaction: discord.Interaction | None = None,
     ):
-        """Internal version of /albumrating edit that works for both slash and button callbacks."""
+        """Internal version of /albumrating edit that works for both slash and button callbacks.
+
+        When original_message and original_interaction are provided (i.e. triggered from the
+        Edit Rating button), the editing UI is shown by editing the original rating message
+        in-place rather than sending a new message. The original message is restored once
+        editing is complete or cancelled.
+        """
         database = LocalDatabase()
 
         # Fetch the target rating from DB
@@ -1020,33 +1028,74 @@ class AlbumRatings(commands.Cog):
         unpackedRating = music.unpackAlbumRating(bot, rating.serializedRating)
         firstTrack = unpackedRating.tracks[0]
 
-        view = music.SongRatingView(unpackedRating)
         albumEmbed = music.AlbumRatingEmbedReply(unpackedRating)
         trackEmbed = music.TrackRatingEmbedReply(firstTrack)
 
-        # Send editing UI message
-        editMsg: discord.Message = await channel.send(
-            embeds=[albumEmbed, trackEmbed],
-            view=view,
+        # Determine whether we're editing in-place (button) or sending a new message (slash)
+        in_place = original_message is not None and original_interaction is not None
+
+        async def _restore_original_message():
+            """Restores the original rating embed + buttons back onto the in-place message."""
+            try:
+                currentRating = database.get(
+                    "SELECT * FROM albumRatings WHERE ratingID = ?", (ratingID,)
+                )
+                if currentRating:
+                    restored = music.unpackAlbumRating(
+                        bot, music.SmallRating(currentRating[0]).serializedRating
+                    )
+                    restoredEmbed = music.AlbumRatingEmbedReply(restored)
+                    await original_message.edit(
+                        embeds=[restoredEmbed],
+                        view=music.FinishedRatingPersistentMessageButtonsView(
+                            restored.link
+                        ),
+                    )
+            except Exception:
+                pass
+
+        view = music.SongRatingView(
+            unpackedRating,
+            restore_callback=_restore_original_message if in_place else None,
         )
+
+        if in_place:
+            # Edit the original rating message in-place so the user doesn't have to scroll
+            await original_interaction.response.edit_message(
+                embeds=[albumEmbed, trackEmbed],
+                view=view,
+            )
+            editMsg = original_message
+        else:
+            # Slash command path: send a fresh editing message to the channel
+            editMsg: discord.Message = await channel.send(
+                embeds=[albumEmbed, trackEmbed],
+                view=view,
+            )
+
         view.message = editMsg
 
         try:
             timedOut = await view.wait()
         except Exception as e:
-            # Always clean up UI safely
-            try:
-                await editMsg.delete()
-            except discord.errors.NotFound:
-                pass
+            if in_place:
+                await _restore_original_message()
+            else:
+                try:
+                    await editMsg.delete()
+                except discord.errors.NotFound:
+                    pass
             raise e
 
         # Handle cancelled or timed-out edit
         if timedOut or view.cancelled:
-            try:
-                await editMsg.delete()
-            except discord.errors.NotFound:
-                pass
+            if in_place:
+                await _restore_original_message()
+            else:
+                try:
+                    await editMsg.delete()
+                except discord.errors.NotFound:
+                    pass
             return
 
         # Update rating with new time and embed
@@ -1056,28 +1105,46 @@ class AlbumRatings(commands.Cog):
         # Locate rating channel
         ratingChannel = bot.get_channel(RATING_CHANNEL)
         if not ratingChannel:
+            if in_place:
+                await _restore_original_message()
+            else:
+                try:
+                    await editMsg.delete()
+                except discord.errors.NotFound:
+                    pass
+            raise Exception("The rating channel could not be found.")
+
+        if in_place:
+            # The original message IS the rating message — just update it directly
+            ratingMessage = await editMsg.edit(
+                embeds=[finishedEmbed],
+                view=music.FinishedRatingPersistentMessageButtonsView(
+                    unpackedRating.link
+                ),
+            )
+        else:
+            # Slash command path: try to edit or recreate the rating message
+            try:
+                oldMsg = await ratingChannel.fetch_message(oldMessageID)
+                ratingMessage = await oldMsg.edit(
+                    embed=finishedEmbed,
+                    view=music.FinishedRatingPersistentMessageButtonsView(
+                        unpackedRating.link
+                    ),
+                )
+            except discord.errors.NotFound:
+                ratingMessage = await ratingChannel.send(
+                    embed=finishedEmbed,
+                    view=music.FinishedRatingPersistentMessageButtonsView(
+                        unpackedRating.link
+                    ),
+                )
+
+            # Clean up the edit UI
             try:
                 await editMsg.delete()
             except discord.errors.NotFound:
                 pass
-            raise Exception("The rating channel could not be found.")
-
-        # Try to edit or recreate the rating message
-        try:
-            oldMsg = await ratingChannel.fetch_message(oldMessageID)
-            ratingMessage = await oldMsg.edit(
-                embed=finishedEmbed,
-                view=music.FinishedRatingPersistentMessageButtonsView(
-                    unpackedRating.link
-                ),
-            )
-        except discord.errors.NotFound:
-            ratingMessage = await ratingChannel.send(
-                embed=finishedEmbed,
-                view=music.FinishedRatingPersistentMessageButtonsView(
-                    unpackedRating.link
-                ),
-            )
 
         # Update the database
         packedAlbumRating = unpackedRating.packAlbumRating(ratingMessage)
@@ -1096,13 +1163,7 @@ class AlbumRatings(commands.Cog):
             ),
         )
 
-        # Clean up the edit UI safely
-        try:
-            await editMsg.delete()
-        except discord.errors.NotFound:
-            pass
-
-        # Confirmation embed
+        # Confirmation embed — send as a temporary channel message
         savedReply = EmbedReply(
             "Album Ratings - Edited",
             "albumratings",

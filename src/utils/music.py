@@ -101,6 +101,7 @@ class EditRatingButton(discord.ui.Button):
             return
 
         cog: AlbumRatings = interaction.client.get_cog("AlbumRatings")
+
         if not cog:
             reply = EmbedReply(
                 "Album Ratings - Edit Rating",
@@ -112,21 +113,14 @@ class EditRatingButton(discord.ui.Button):
             await interaction.response.send_message(embed=reply)
             return
 
-        reply = EmbedReply(
-            "Album Ratings - Edit Rating", "albumratings", description="Editor opened."
-        )
-
-        replyMessage = await interaction.response.send_message(
-            embed=reply, ephemeral=True
-        )
-        await replyMessage.delete_original_response()
-
         await cog._albumrating_edit_core(
             user=interaction.user,
             ratingID=ratingID,
             channel=interaction.channel,
             guild=interaction.guild,
             bot=interaction.client,
+            original_message=interaction.message,
+            original_interaction=interaction,
         )
 
 
@@ -306,13 +300,19 @@ class CancelConfirmView(discord.ui.View):
         label="Cancel Rating", style=discord.ButtonStyle.danger, emoji="⛔"
     )
     async def confirm(self, button: discord.ui.Button, ctx: discord.Interaction):
-        response = await ctx.response.defer()
-
-        await ctx.delete_original_response()
-
         self.ratingView.cancelled = True
-
         self.stop()
+
+        if self.ratingView.restore_callback:
+            # In-place mode: restore the original rating message via the callback
+            await ctx.response.defer()
+            try:
+                await self.ratingView.restore_callback()
+            except Exception:
+                pass
+        else:
+            await ctx.response.defer()
+            await ctx.delete_original_response()
 
 
 class CancelButton(discord.ui.Button):
@@ -445,13 +445,19 @@ class AlbumNavigationButton(discord.ui.Button):
 
 
 class SongRatingView(discord.ui.View):
-    def __init__(self, album: "Album", startIndex: int = 0):
-        super().__init__(timeout=TIMEOUT_FOR_RATING_SELECT, disable_on_timeout=True)
+    def __init__(self, album: "Album", startIndex: int = 0, restore_callback=None):
+        # When restoring in-place, we handle the message edit ourselves in on_timeout,
+        # so disable_on_timeout must be False to avoid pycord racing us with a buttons-disabled edit.
+        super().__init__(
+            timeout=TIMEOUT_FOR_RATING_SELECT,
+            disable_on_timeout=restore_callback is None,
+        )
 
         self.album = album
         self.index = startIndex
         self.cancelled = False
         self.message: discord.Message | None = None
+        self.restore_callback = restore_callback  # async callable; called on cancel/timeout when editing in-place
 
         self._updateItems()
 
@@ -591,17 +597,24 @@ class SongRatingView(discord.ui.View):
             pass  # idek bruh
 
     async def on_timeout(self):
-        reply = EmbedReply(
-            "Album Rating - Timed Out",
-            "albumratings",
-            True,
-            description=f"Album rating timed out after {round((TIMEOUT_FOR_RATING_SELECT/60)/60, 2)} hrs of inactivity. Please retry the rating.",
-        )
+        if self.restore_callback:
+            # In-place mode: restore the original rating message instead of showing a timeout embed
+            try:
+                await self.restore_callback()
+            except Exception:
+                pass
+        else:
+            reply = EmbedReply(
+                "Album Rating - Timed Out",
+                "albumratings",
+                True,
+                description=f"Album rating timed out after {round((TIMEOUT_FOR_RATING_SELECT/60)/60, 2)} hrs of inactivity. Please retry the rating.",
+            )
 
-        try:
-            await self.message.edit(embed=reply, view=None)
-        except discord.NotFound:
-            pass  # message already deleted/edited elsewhere
+            try:
+                await self.message.edit(embed=reply, view=None)
+            except discord.NotFound:
+                pass  # message already deleted/edited elsewhere
 
         self.stop()
 
