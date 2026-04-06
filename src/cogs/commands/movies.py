@@ -100,7 +100,7 @@ class Movies(commands.Cog):
         description="View upcoming showtimes for movies.",
         guild_ids=[799341195109203998],
     )
-    @is_under_construction()
+    # @is_under_construction()
     async def showtimes(
         self,
         ctx: discord.ApplicationContext,
