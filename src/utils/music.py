@@ -1379,21 +1379,25 @@ class EditCommentsModal(discord.ui.Modal):
             title=text.truncateString(f"Comments On {obj.name}", 45)[0], *args, **kwargs
         )
 
-        self.add_item(
-            discord.ui.InputText(
-                style=discord.InputTextStyle.paragraph,
-                label="Edit Comments",
-                max_length=COMMENT_LENGTH_CHARACTER_LIMIT,
-                value=obj.parseComments(),
-                required=False,
-            )
+        self.comment_input = discord.ui.InputText(
+            style=discord.InputTextStyle.long,
+            label="Edit Comments",
+            max_length=COMMENT_LENGTH_CHARACTER_LIMIT,
+            min_length=0,
+            value=obj.parseComments(),
+            required=False,
+            placeholder="Leave blank to remove comments...",
         )
+        self.add_item(self.comment_input)
 
     async def callback(self, ctx: discord.Interaction):
-        if not self.children[0].value:
+        # Discord returns an empty string "" if the field is cleared
+        val = self.comment_input.value
+
+        if val is None or val.strip() == "":
             self.obj.setComments(None)
         else:
-            self.obj.setComments(self.children[0].value)
+            self.obj.setComments(val)
 
         await self.view.showTrackAndRating(ctx)
 
