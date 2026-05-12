@@ -516,7 +516,7 @@ class Item:
 
         itemDetailEmbed.add_field(
             name="Item 48h Change",
-            value=f"{str(self.change48hPrice) if self.change48hPrice else "(No Data)"} ({"- " if self.change48hPrice and self.change48hPrice < 0 else "+ " if self.change48hPrice and self.change48hPrice > 0 else "" + str(self.change48hPercent) + "%" if self.change48hPrice and self.change48hPercent else "N/A"})",
+            value=f"{str(self.change48hPrice) if self.change48hPrice else "(No Data)"} ({"↑" if self.change48hPercent > 0 else "↓" if self.change48hPercent < 0 else ""} {str(self.change48hPercent) + "%" if self.change48hPrice and self.change48hPercent else "N/A"})",
         )
 
         itemDetailEmbed.add_field(
