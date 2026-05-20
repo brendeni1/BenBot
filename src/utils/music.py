@@ -18,6 +18,16 @@ from src import constants
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 
+
+def _get_spotify_client() -> spotipy.Spotify:
+    """Return an authenticated Spotify client."""
+    return spotipy.Spotify(
+        auth_manager=SpotifyClientCredentials(
+            client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET
+        )
+    )
+
+
 # Timeouts in mins.
 TIMEOUT_TO_PICK_ALBUM = 1 * (60)
 TIMEOUT_FOR_RATING_SELECT = 120 * (
@@ -46,6 +56,17 @@ class Artist:
         self.link = link
 
 
+class TrackFlag:
+    def __init__(
+        self, id: str, shortName: str, longName: str, emoji: str, description: str
+    ):
+        self.id = id
+        self.shortName = shortName
+        self.longName = longName
+        self.emoji = emoji
+        self.description = description
+
+
 class EditRatingButton(discord.ui.Button):
     def __init__(self, **kwargs):
         super().__init__(
@@ -72,8 +93,8 @@ class EditRatingButton(discord.ui.Button):
             await interaction.response.send_message(embed=reply, ephemeral=True)
             return
 
-        db = LocalDatabase()
-        result = db.get("SELECT * FROM albumRatings WHERE ratingID = ?", (ratingID,))
+        db = LocalDatabase(database="albumratings")
+        result = db.get("SELECT * FROM ratings WHERE ratingID = ?", (ratingID,))
 
         if not result:
             reply = EmbedReply(
@@ -150,10 +171,8 @@ class DeleteRatingButton(discord.ui.Button):
             await interaction.response.send_message(embed=reply, ephemeral=True)
             return
 
-        database = LocalDatabase()
-        result = database.get(
-            "SELECT * FROM albumRatings WHERE ratingID = ?", (ratingID,)
-        )
+        database = LocalDatabase(database="albumratings")
+        result = database.get("SELECT * FROM ratings WHERE ratingID = ?", (ratingID,))
 
         if not result:
             reply = EmbedReply(
@@ -224,7 +243,7 @@ class DeleteRatingButton(discord.ui.Button):
 
             await interaction.message.delete()
 
-            database.setOne("DELETE FROM albumRatings WHERE ratingID = ?", (ratingID,))
+            database.setOne("DELETE FROM ratings WHERE ratingID = ?", (ratingID,))
 
             reply = EmbedReply(
                 "Album Ratings - Deleted",
@@ -489,6 +508,8 @@ class SongRatingView(discord.ui.View):
 
         self.add_item(SelectSongRating(track, row=0))
 
+        self.add_item(QuickFlagButton("hof", track, row=1))
+
         if trackAmount > 1:
             currentFavouriteIndex = track.getFavouriteIndex()
 
@@ -506,25 +527,6 @@ class SongRatingView(discord.ui.View):
 
             hasRating: bool = currentFavouriteIndex in FAVOURITE_INDEX_OPTIONS
             self.add_item(ClearFavouriteButton(track, row=1, disabled=not hasRating))
-
-            self.add_item(
-                ExcludeFromRatingButton(
-                    track,
-                    row=2,
-                    disabled=any(
-                        [
-                            track.getRating() == -1,
-                            all(
-                                [
-                                    trackReLoop.getRating() == -1
-                                    for trackReLoop in self.album.tracks
-                                    if trackReLoop != track
-                                ]
-                            ),
-                        ]
-                    ),
-                )
-            )
 
         self.add_item(EditCommentsButton("Song Comments", track, row=2))
 
@@ -552,6 +554,27 @@ class SongRatingView(discord.ui.View):
                 disabled=isFirstSong,
             )
         )
+
+        if trackAmount > 1:
+            self.add_item(
+                ExcludeFromRatingButton(
+                    track,
+                    row=3,
+                    disabled=any(
+                        [
+                            track.getRating() == -1,
+                            all(
+                                [
+                                    trackReLoop.getRating() == -1
+                                    for trackReLoop in self.album.tracks
+                                    if trackReLoop != track
+                                ]
+                            ),
+                        ]
+                    ),
+                )
+            )
+
         self.add_item(
             AlbumNavigationButton(
                 1,
@@ -791,12 +814,102 @@ class FavouriteButton(discord.ui.Button):
         await view.showTrackAndRating(ctx)
 
 
+class QuickFlagButton(discord.ui.Button):
+    def __init__(self, flagID: str, track: Track, **kwargs):
+        self.track = track
+
+        try:
+            baseFlagDetails = constants.BASE_FLAGS[flagID]
+
+            self.flag = TrackFlag(
+                id=baseFlagDetails.get("id"),
+                shortName=baseFlagDetails.get("shortName"),
+                longName=baseFlagDetails.get("longName"),
+                emoji=baseFlagDetails.get("emoji"),
+                description=baseFlagDetails.get("description"),
+            )
+
+            emoji = self.flag.emoji
+            label = self.flag.shortName
+        except KeyError as e:
+            raise Exception(
+                f"That flag is not a default flag but was added via a quick flag button! Add '{flagID}' to constants.BASE_FLAGS!"
+            )
+
+        super().__init__(
+            label=label,
+            style=discord.ButtonStyle.secondary,
+            emoji=emoji,
+            **kwargs,
+        )
+
+    async def callback(self, ctx: discord.Interaction):
+        view: SongRatingView = self.view
+
+        database = LocalDatabase(database="albumratings")
+
+        rawFlags = database.get(
+            "SELECT * FROM `trackFlags` WHERE trackID = ? AND raterID = ?",
+            params=(self.track.spotifyID, view.album.createdBy.id),
+        )
+
+        if rawFlags and len(rawFlags) > 0:
+            parsedFlags = [pickle.loads(flag[8]) for flag in rawFlags]
+
+            for flag in parsedFlags:
+                if flag.id == self.flag.id:
+                    # Flag already exists, so remove it
+                    database.setOne(
+                        "DELETE FROM `trackFlags` WHERE flagID = ? AND trackID = ? AND raterID = ?",
+                        params=(
+                            self.flag.id,
+                            self.track.spotifyID,
+                            view.album.createdBy.id,
+                        ),
+                    )
+
+                    self.track.flags = [
+                        f
+                        for f in getattr(self.track, "flags", [])
+                        if f.id != self.flag.id
+                    ]
+
+                    await view.showTrackAndRating(ctx)
+                    return
+
+        serializedFlag = pickle.dumps(self.flag)
+
+        database.setOne(
+            "INSERT INTO `trackFlags` (`flagID`, `trackID`, `trackName`, `albumID`, `albumName`, `raterID`, `dateAdded`, `artistName`, `serializedFlag`, rating) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            params=(
+                self.flag.id,
+                self.track.spotifyID,
+                self.track.name,
+                view.album.spotifyID,
+                view.album.name,
+                view.album.createdBy.id,
+                dates.formatSimpleDate(
+                    dates.simpleDateObj(timeNow=True), databaseDate=True
+                ),
+                self.track.getArtists(True),
+                serializedFlag,
+                view.album.ratingID,
+            ),
+        )
+
+        self.track.flags = (
+            self.track.flags if hasattr(self.track, "flags") else []
+        ) + [self.flag]
+
+        await view.showTrackAndRating(ctx)
+
+
 class ExcludeFromRatingButton(discord.ui.Button):
     def __init__(self, track: Track, **kwargs):
         self.track = track
 
         super().__init__(
-            label=f"Exclude Song",
+            label=f"Exclude",
             style=discord.ButtonStyle.secondary,
             emoji="↪️",
             **kwargs,
@@ -866,16 +979,18 @@ class TrackRatingEmbedReply(EmbedReply):
 
         favouriteIndex = track.getFavouriteIndex()
 
-        medalFormatted = (
-            f"{constants.RANKING_MEDALS[str(favouriteIndex)]} {text.ordinal(favouriteIndex)} Place"
-            if favouriteIndex in FAVOURITE_INDEX_OPTIONS
-            else "*(Not Favourited)*"
-        )
+        flagsFormatted = ""
+
+        for flag in getattr(track, "flags", []):
+            flagsFormatted += f"{flag.emoji} {flag.longName}\n"
+
+        if favouriteIndex in FAVOURITE_INDEX_OPTIONS:
+            flagsFormatted += f"{constants.RANKING_MEDALS[str(favouriteIndex)]} {text.ordinal(favouriteIndex)} Place"
+        else:
+            flagsFormatted += "*(No Flags)*"
 
         if track.album.totalTracks() > 1:
-            self.add_field(
-                name="***Favourite Rating***", value=medalFormatted, inline=True
-            )
+            self.add_field(name="***Song Flags***", value=flagsFormatted, inline=True)
 
         self.add_field(
             name="***Song Duration***", value=track.getDuration(True), inline=True
@@ -1246,11 +1361,25 @@ class AlbumRatingEmbedReply(EmbedReply):
             else:
                 favouriteIndex = track.getFavouriteIndex()
 
-                medal = (
-                    f" {constants.RANKING_MEDALS[str(favouriteIndex)] if str(favouriteIndex) in constants.RANKING_MEDALS else f'({text.ordinal(favouriteIndex)} Place)'} "
-                    if favouriteIndex
-                    else " "
-                )
+                parsedFlags = getattr(track, "flags", [])
+
+                flagString = ""
+
+                if parsedFlags:
+                    for flag in parsedFlags:
+                        flagString += f"{flag.emoji}"
+
+                if favouriteIndex is not None:
+                    favMedal = constants.RANKING_MEDALS.get(
+                        str(favouriteIndex), f"({text.ordinal(favouriteIndex)} Place)"
+                    )
+
+                    flagString += f"{favMedal}"
+
+                if not flagString:
+                    flagString = " "
+                else:
+                    flagString = " " + flagString + " "
 
                 comments = track.parseComments()
 
@@ -1267,7 +1396,7 @@ class AlbumRatingEmbedReply(EmbedReply):
 
                     seenDiscs.add(track.discNumber)
 
-                self.description += f"{discString}**{track.trackNumber}.**{medal}{track.name} · `{track.getRating(True)}`{formattedComments}\n"
+                self.description += f"{discString}**{track.trackNumber}.**{flagString}{track.name} · `{track.getRating(True)}`{formattedComments}\n"
 
         if isAveraged:
             formattedRatedBy = ""
@@ -1381,12 +1510,12 @@ class EditCommentsModal(discord.ui.Modal):
 
         self.comment_input = discord.ui.InputText(
             style=discord.InputTextStyle.long,
-            label="Edit Comments",
+            label="Edit Comments (Enter CLEAR to Clear Comments)",
             max_length=COMMENT_LENGTH_CHARACTER_LIMIT,
             min_length=0,
             value=obj.parseComments(),
             required=False,
-            placeholder="Leave blank to remove comments...",
+            placeholder="Enter CLEAR to remove comments...",
         )
         self.add_item(self.comment_input)
 
@@ -1394,7 +1523,7 @@ class EditCommentsModal(discord.ui.Modal):
         # Discord returns an empty string "" if the field is cleared
         val = self.comment_input.value
 
-        if val is None or val.strip() == "":
+        if not val or val.strip() == "CLEAR":
             self.obj.setComments(None)
         else:
             self.obj.setComments(val)
@@ -1505,30 +1634,14 @@ def searchForAlbumName(query: str, limit=5, type="album") -> list:
     if not query:
         raise ValueError("utils > music.py > albumQuery: Album query is blank!")
 
-    spotifyClient = spotipy.Spotify(
-        auth_manager=SpotifyClientCredentials(
-            client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET
-        )
-    )
-
-    albumResults = spotifyClient.search(q=query, limit=limit, type=type)
-
-    return albumResults
+    return _get_spotify_client().search(q=query, limit=limit, type=type)
 
 
 def fetchAlbumDetailsByID(albumID: str) -> dict:
     if not albumID:
         raise ValueError("utils > music.py > albumDetails: Album ID is blank!")
 
-    spotifyClient = spotipy.Spotify(
-        auth_manager=SpotifyClientCredentials(
-            client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET
-        )
-    )
-
-    albumResults = spotifyClient.album(album_id=albumID)
-
-    return albumResults
+    return _get_spotify_client().album(album_id=albumID)
 
 
 async def parseAlbumDetails(

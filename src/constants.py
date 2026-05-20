@@ -44,6 +44,16 @@ RANKING_MEDALS = {
     "3": "🥉",
 }
 
+BASE_FLAGS = {
+    "hof": {
+        "id": "hof",
+        "shortName": "HOF",
+        "longName": "Hall of Fame",
+        "emoji": "👑",
+        "description": "A song that is worthy of a spot in the music hall of fame.",
+    }
+}
+
 MOVIE_CINEMAS = {
     "Cineplex": {
         "ON": [
