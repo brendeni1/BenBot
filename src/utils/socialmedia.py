@@ -174,7 +174,7 @@ class InstagramPost:
 
         reply.set_footer(
             text=f"Data by SteadyAPI · Post ID: {self.id} · Instagram User ID: {self.user.id}",
-            icon_url="https://i.brendenian.net/ns6VvKUd.jpg",
+            icon_url="https://files.brendenian.net/BRNDN/ns6vvkud.jpg",
         )
 
         return reply

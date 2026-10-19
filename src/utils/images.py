@@ -7,9 +7,12 @@ from PIL import Image
 from sklearn.cluster import KMeans
 
 
-async def uploadToChibisafe(image: discord.Attachment | bytes):
-    token = os.getenv("CHIBISAFE_BENBOT_TOKEN")
-    cdnEndpoint = "https://cdn.brendenian.net/api/upload"
+async def uploadToFlare(image: discord.Attachment | bytes):
+    token = os.getenv("FLARE_BENBOT_TOKEN")
+    if not token:
+        raise RuntimeError("Missing FLARE_BENBOT_TOKEN")
+
+    flareEndpoint = "https://files.brendenian.net/api/files"
 
     # Download the file from Discord into memory asynchronously
     if isinstance(image, discord.Attachment):
@@ -27,18 +30,24 @@ async def uploadToChibisafe(image: discord.Attachment | bytes):
         content_type=image.content_type,
     )
 
-    headers = {"x-api-key": f"{token}", "Accept": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
 
     async with aiohttp.ClientSession() as session:
-        async with session.post(cdnEndpoint, data=data, headers=headers) as response:
-            if response.status == 200:
-                res_data = await response.json()
-                return res_data.get("url")
-            else:
+        async with session.post(flareEndpoint, data=data, headers=headers) as response:
+            if response.status != 200:
                 error_text = await response.text()
                 raise Exception(
-                    f"Chibisafe Upload Failed ({response.status}): {error_text}"
+                    f"Flare upload failed ({response.status}): {error_text}"
                 )
+
+            response_data = await response.json()
+            raw_url = response_data.get("data", {}).get("rawUrl")
+            if not raw_url:
+                raise RuntimeError("Flare upload response did not include data.rawUrl")
+            return raw_url
 
 
 async def extractColours(url: str, num_colors: int = 1) -> list:

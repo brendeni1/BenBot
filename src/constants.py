@@ -843,12 +843,12 @@ UNDER_CONSTRUCTION_EMBED = EmbedReply(
     "🚧🏗️ Command Under Construction 👷🛠️",
     "None",
     True,
-    url="https://i.breia.net/V6DVc85F.mp4",
-).set_image(url="https://i.breia.net/ph7sELj9.png")
+    url="https://files.brendenian.net/BRNDN/v6dvc85f.mp4",
+).set_image(url="https://files.brendenian.net/BRNDN/ph7selj9.png")
 
 OWNER_ONLY_EMBED = EmbedReply(
     "🛑🪪 Owner Only Command 🪪🛑",
     "None",
     True,
-    url="https://i.breia.net/aKS9yXVK.mp4",
-).set_image(url="https://i.breia.net/V6j1Qhqu.png")
+    url="https://files.brendenian.net/BRNDN/aks9yxvk.mp4",
+).set_image(url="https://files.brendenian.net/BRNDN/v6j1qhqu.png")

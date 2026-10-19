@@ -38,8 +38,8 @@ TRAILER_SEARCH_CUTOFF = 40.0
 TRAILER_SEARCH_INIT_AMOUNT = 250
 TRAILER_SEARCH_KEYWORDS = ""
 
-LANDMARK_LOGO = "https://i.breia.net/hIdg4zuf.jpg"
-CINEPLEX_LOGO = "https://i.breia.net/XcLCj1ub.png"
+LANDMARK_LOGO = "https://files.brendenian.net/BRNDN/hidg4zuf.jpg"
+CINEPLEX_LOGO = "https://files.brendenian.net/BRNDN/xclcj1ub.png"
 
 EXCLUDED_LANDMARK_BULLSHIT = ["Mystery Movie", "Behind the Scenes"]
 

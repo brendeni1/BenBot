@@ -322,7 +322,10 @@ class CancelConfirmView(discord.ui.View):
         self.ratingView.cancelled = True
         self.stop()
 
-        if self.ratingView.restore_callback:
+        if (
+            hasattr(self.ratingView, "restore_callback")
+            and self.ratingView.restore_callback
+        ):
             # In-place mode: restore the original rating message via the callback
             await ctx.response.defer()
             try:

@@ -43,13 +43,13 @@ class ImageCommands(commands.Cog):
 
         if image_attachment:
             try:
-                link = await images.uploadToChibisafe(image_attachment)
+                link = await images.uploadToFlare(image_attachment)
             except Exception as e:
                 reply = EmbedReply(
                     "Images - Add - Error",
                     "images",
                     error=True,
-                    description=f"Failed to upload to Chibisafe: {e}",
+                    description=f"Failed to upload to Flare: {e}",
                 )
                 await reply.send(ctx)
                 return

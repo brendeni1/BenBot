@@ -50,6 +50,41 @@ class Sql(commands.Cog):
         self.bot: discord.Bot = bot
 
     @discord.slash_command(
+        description="Temp command for DB.", guild_ids=[799341195109203998]
+    )
+    @is_owner_only()
+    async def tempcommanddb(
+        self,
+        ctx: discord.ApplicationContext,
+    ):
+        try:
+            # get all image entries from the database and update any files.brendenian.net to be all lowercasse
+
+            databaseConnection: LocalDatabase = LocalDatabase()
+
+            results = databaseConnection.get("SELECT * FROM images WHERE link LIKE '%files.brendenian.net%'")
+
+            for result in results:
+                id = result[0]
+                link = result[3]
+
+                newUrl = link.replace("brndn", "BRNDN")
+
+                databaseConnection.setOne(
+                    "UPDATE images SET link = ? WHERE id = ?", (newUrl, id)
+                )
+
+            reply = EmbedReply(
+                "SQL - Temp Command", "sql", description=f"Successfully updated {len(results)} image entries."
+            )
+        except Exception as e:
+            reply = EmbedReply(
+                "SQL - Error", "sql", error=True, description=f"Error: {e}"
+            )
+
+            await reply.send(ctx)
+
+    @discord.slash_command(
         description="Run a SQL command on a database.", guild_ids=[799341195109203998]
     )
     @is_owner_only()
