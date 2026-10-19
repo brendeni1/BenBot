@@ -1,8 +1,12 @@
+import posixpath
+
 import discord
+from pyparsing import results
 import requests
 import asyncio
 import sys
 from discord.ext import commands, pages
+import urllib
 from src.errors import *
 
 from src.classes import *
@@ -1381,6 +1385,82 @@ class AlbumRatings(commands.Cog):
         ctx: discord.ApplicationContext,
     ):
         await ctx.defer()
+
+        database = LocalDatabase(database="albumratings")
+        results = database.get("SELECT * FROM ratings")
+
+        rating_channel = self.bot.get_channel(RATING_CHANNEL) or await self.bot.fetch_channel(RATING_CHANNEL)
+
+        old_domains = (
+            "i.breia.net",
+            "cdn.breia.net",
+            "cdn.brendenian.net",
+            "i.brendenian.net",
+        )
+
+        def update_image_url(url: str | None) -> str | None:
+            if not url or not any(domain in url for domain in old_domains):
+                return url
+
+            parsed = urllib.parse.urlparse(url)
+            filename = posixpath.basename(parsed.path).lower()
+            return f"https://files.brendenian.net/BRNDN/{filename}"
+
+        for result in results:
+            try:
+                rating = music.SmallRating(result)
+                unpackedRating = music.unpackAlbumRating(self.bot, rating.serializedRating)
+
+                updated = False
+
+                # Check and update coverImage
+                if unpackedRating.coverImage and any(domain in unpackedRating.coverImage for domain in old_domains):
+                    unpackedRating.coverImage = update_image_url(unpackedRating.coverImage)
+                    updated = True
+
+                # Check and update customCoverImage if present
+                if getattr(unpackedRating, "customCoverImage", None) and any(
+                    domain in unpackedRating.customCoverImage for domain in old_domains
+                ):
+                    unpackedRating.customCoverImage = update_image_url(unpackedRating.customCoverImage)
+                    updated = True
+
+                # Fetch the associated message
+                target_message: discord.Message | None = None
+                if rating.lastRelatedMessage and rating_channel:
+                    try:
+                        target_message = await rating_channel.fetch_message(rating.lastRelatedMessage)
+                    except (discord.NotFound, discord.HTTPException):
+                        target_message = None
+
+                # Edit the message BEFORE packing, because packAlbumRating destructively 
+                # changes unpackedRating.createdBy into an integer
+                if target_message:
+                    finishedEmbed = music.AlbumRatingEmbedReply(unpackedRating)
+                    view = music.FinishedRatingPersistentMessageButtonsView(unpackedRating.link)
+                    await target_message.edit(embed=finishedEmbed, view=view)
+                    await asyncio.sleep(0.5)
+
+                # Pack the updated album rating
+                message_ref = target_message or discord.Object(id=rating.lastRelatedMessage)
+                packedAlbumRating = unpackedRating.packAlbumRating(message_ref)
+
+                # Update the serialized rating in the database
+                database.setOne(
+                    """
+                    UPDATE ratings
+                    SET serializedRating = ?
+                    WHERE ratingID = ?
+                    """,
+                    (
+                        packedAlbumRating.serializedRating,
+                        rating.ratingID,
+                    ),
+                )
+
+            except Exception as e:
+                print(f"Failed to update rating row {result[0]}: {e}")
+                continue
 
         reply = EmbedReply(
             "Album Ratings - Update All Objects",
