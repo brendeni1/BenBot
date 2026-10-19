@@ -5,6 +5,11 @@ import numpy as np
 from io import BytesIO
 from PIL import Image
 from sklearn.cluster import KMeans
+from html.parser import HTMLParser
+from urllib.parse import urlparse, urljoin
+
+FILE_HOST_PAGES = {"files.brendenian.net"}
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; DiscordBot)"}
 
 
 async def uploadToFlare(image: discord.Attachment | bytes):
@@ -52,25 +57,38 @@ async def uploadToFlare(image: discord.Attachment | bytes):
 
 async def extractColours(url: str, num_colors: int = 1) -> list:
     """Downloads image and runs KMeans clustering to find dominant colors."""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status != 200:
-                return [[0, 0, 0]]  # Fallback to black on error
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; DiscordBot)",
+        "Accept": "image/*,*/*;q=0.8",
+    }
+    content = b""
+    contentType = None
 
-            content = await response.read()
+    try:
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(url, timeout=timeout) as response:
+                contentType = response.headers.get("Content-Type")
+                if response.status != 200:
+                    return [[0, 0, 0]]  # Fallback to black on error
+                content = await response.read()
 
-    # Processing with Pillow/Numpy (CPU intensive, but manageable)
-    img = Image.open(BytesIO(content)).convert("RGB")
+        img = Image.open(BytesIO(content)).convert("RGB")
+    except Exception as e:
+        print(
+            f"extractColours failed for {url}: {e!r} "
+            f"(content-type={contentType}, first bytes={content[:32]!r})"
+        )
+        return [[0, 0, 0]]
+
     img = img.resize((150, 150))
 
-    img_data = np.array(img)
-    img_data = img_data.reshape((-1, 3))
+    img_data = np.array(img).reshape((-1, 3))
 
     kmeans = KMeans(n_clusters=num_colors, random_state=42, n_init="auto")
     kmeans.fit(img_data)
 
-    colours = kmeans.cluster_centers_.astype(int).tolist()
-    return colours
+    return kmeans.cluster_centers_.astype(int).tolist()
 
 
 async def fetchToFile(url: str, filename: str) -> discord.File | None:
@@ -110,15 +128,81 @@ async def fetchToFile(url: str, filename: str) -> discord.File | None:
         return None
 
 
-async def urlIsImage(url: str) -> bool:
-    """Performs a HEAD request to check if a URL points to an image."""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.head(url, allow_redirects=True, timeout=5) as response:
-                if response.status != 200:
-                    return False
+class _ImageTagParser(HTMLParser):
+    """Collects og:image-style meta tags and <img> sources from an HTML page."""
 
-                content_type = response.headers.get("Content-Type", "")
-                return content_type.startswith("image/")
+    def __init__(self):
+        super().__init__()
+        self.meta_images = []
+        self.img_srcs = []
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "meta":
+            key = a.get("property") or a.get("name")
+            if key in ("og:image", "og:image:url", "twitter:image") and a.get("content"):
+                self.meta_images.append(a["content"])
+        elif tag == "img" and a.get("src"):
+            self.img_srcs.append(a["src"])
+
+
+async def _isDirectImage(session: aiohttp.ClientSession, url: str) -> bool:
+    """HEAD check, falling back to a streamed GET if HEAD isn't supported."""
+    timeout = aiohttp.ClientTimeout(total=5)
+    try:
+        async with session.head(url, allow_redirects=True, timeout=timeout) as resp:
+            if resp.status == 200:
+                return resp.headers.get("Content-Type", "").startswith("image/")
+            if resp.status not in (403, 405, 501):
+                return False
+    except Exception:
+        pass
+    try:
+        async with session.get(url, allow_redirects=True, timeout=timeout) as resp:
+            return resp.status == 200 and resp.headers.get("Content-Type", "").startswith("image/")
     except Exception:
         return False
+
+
+async def resolveImageUrl(url: str) -> str | None:
+    """Returns a direct image URL for `url`, or None if it isn't/doesn't reference an image."""
+    try:
+        async with aiohttp.ClientSession(headers=HEADERS) as session:
+            if await _isDirectImage(session, url):
+                return url
+
+            parsed = urlparse(url)
+            host = (parsed.hostname or "").lower()
+            if host not in FILE_HOST_PAGES:
+                return None
+
+            # files.brendenian.net page links map directly to <page>/raw
+            path = parsed.path.rstrip("/")
+            if not path.endswith("/raw"):
+                rawUrl = parsed._replace(path=path + "/raw", query="", fragment="").geturl()
+                if await _isDirectImage(session, rawUrl):
+                    return rawUrl
+
+            # Fallback: scrape the page for og:image / <img>
+            timeout = aiohttp.ClientTimeout(total=5)
+            async with session.get(url, allow_redirects=True, timeout=timeout) as resp:
+                if resp.status != 200 or "text/html" not in resp.headers.get("Content-Type", ""):
+                    return None
+                html = await resp.text()
+                base = str(resp.url)
+
+            parser = _ImageTagParser()
+            parser.feed(html)
+
+            for candidate in parser.meta_images + parser.img_srcs:
+                full = urljoin(base, candidate)
+                if await _isDirectImage(session, full):
+                    return full
+    except Exception:
+        pass
+    return None
+
+
+async def urlIsImage(url: str) -> bool:
+    """True if the URL is an image, or (for files.brendenian.net) a page referencing one."""
+    return await resolveImageUrl(url) is not None

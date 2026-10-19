@@ -1558,19 +1558,21 @@ class CustomAlbumCoverModal(discord.ui.Modal):
         url = self.children[0].value
 
         if url:
-            isImage = await images.urlIsImage(url)
+            resolvedUrl = await images.resolveImageUrl(url)
 
-            if not isImage:
+            if not resolvedUrl:
                 errorEmbed = EmbedReply(
                     "Album Ratings - Override Cover Art - Error",
                     "albumratings",
                     error=True,
-                    description="You supplied an invalid link; an image could not be found.\n\nPlease ensure that the link leads directly to an image.",
+                    description="You supplied an invalid link; an image could not be found.\n\nPlease supply a direct image link or a files.brendenian.net link.",
                 )
 
                 await ctx.response.send_message(embed=errorEmbed, ephemeral=True)
 
                 return
+
+            url = resolvedUrl
 
         await self.obj.setCoverImage(url=url, custom=True)
 
