@@ -417,6 +417,8 @@ class AlbumRatings(commands.Cog):
                     ),
                 )
 
+                music.commitTrackFlags(parsedAlbumDetails)
+
                 packedAlbumRating = parsedAlbumDetails.packAlbumRating(
                     displayedAlbumReviewMessage
                 )
@@ -731,6 +733,8 @@ class AlbumRatings(commands.Cog):
             except discord.errors.NotFound:
                 pass
 
+        music.commitTrackFlags(unpackedRating)   # <-- add here
+
         packedAlbumRating = unpackedRating.packAlbumRating(ratingMessage)
         database.setOne(
             """
@@ -945,6 +949,7 @@ class AlbumRatings(commands.Cog):
                 except discord.errors.NotFound:
                     pass
 
+            database.setOne("DELETE FROM trackFlags WHERE rating = ?", (id,))
             database.setOne("DELETE FROM ratings WHERE ratingID = ?", (id,))
 
             reply = EmbedReply(

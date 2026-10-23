@@ -62,6 +62,16 @@ def ignore_stale(func):
         return await func(self, ctx)
     return wrapper
 
+def _seedFlags(track: "Track", raterID: int) -> None:
+    """Load existing flags from the DB once, so toggling reflects saved state."""
+    if hasattr(track, "flags"):
+        return
+
+    rows = LocalDatabase(database="albumratings").get(
+        "SELECT * FROM `trackFlags` WHERE trackID = ? AND raterID = ?",
+        params=(track.spotifyID, raterID),
+    )
+    track.flags = [pickle.loads(r[8]) for r in rows] if rows else []
 
 class Artist:
     def __init__(self, spotifyID: str, name: str, link: str):
@@ -257,6 +267,7 @@ class DeleteRatingButton(discord.ui.Button):
 
             await interaction.message.delete()
 
+            database.setOne("DELETE FROM trackFlags WHERE rating = ?", (ratingID,))
             database.setOne("DELETE FROM ratings WHERE ratingID = ?", (ratingID,))
 
             reply = EmbedReply(
@@ -351,7 +362,6 @@ class CancelConfirmView(discord.ui.View):
             await ctx.delete_original_response()
 
 
-@ignore_stale
 class CancelButton(discord.ui.Button):
     def __init__(self, **kwargs):
         super().__init__(
@@ -360,7 +370,7 @@ class CancelButton(discord.ui.Button):
             emoji="⛔",
             **kwargs,
         )
-
+    @ignore_stale
     async def callback(self, ctx: discord.ApplicationContext):
         cancelEmbed = EmbedReply(
             "Album Rating - Confirm Cancel",
@@ -426,7 +436,7 @@ class DuplicateRatingConfirmationView(discord.ui.View):
 
         await interaction.response.defer()
 
-@ignore_stale
+
 class SaveRatingButton(discord.ui.Button):
     def __init__(self, **kwargs):
         super().__init__(
@@ -435,20 +445,20 @@ class SaveRatingButton(discord.ui.Button):
             emoji="💾",
             **kwargs,
         )
-
+    @ignore_stale
     async def callback(self, ctx: discord.Interaction):
         self.view.disable_all_items()
         self.view.stop()
 
         await ctx.response.defer()
 
-@ignore_stale
+
 class NextTrackButton(discord.ui.Button):
     def __init__(self, **kwargs):
         super().__init__(
             label="Next Track", style=discord.ButtonStyle.primary, emoji="➡️", **kwargs
         )
-
+    @ignore_stale
     async def callback(self, ctx: discord.Interaction):
         view: SongRatingView = self.view
         view.index += 1
@@ -458,7 +468,7 @@ class NextTrackButton(discord.ui.Button):
             await view.showTrackAndRating(ctx)
 
 
-@ignore_stale
+
 class AlbumNavigationButton(discord.ui.Button):
     def __init__(self, skipAmount: int, **kwargs):
         super().__init__(
@@ -466,7 +476,7 @@ class AlbumNavigationButton(discord.ui.Button):
         )
 
         self.skipAmount = skipAmount
-
+    @ignore_stale
     async def callback(self, ctx: discord.Interaction):
         view: SongRatingView = self.view
 
@@ -661,7 +671,7 @@ class SongRatingView(discord.ui.View):
         self.stop()
 
 
-@ignore_stale
+
 class SelectSongRating(discord.ui.Select):
     def __init__(self, track: "Track", **kwargs):
         self.track = track
@@ -688,6 +698,7 @@ class SelectSongRating(discord.ui.Select):
             **kwargs,
         )
 
+    @ignore_stale
     async def callback(self, ctx: discord.Interaction):
         view: SongRatingView = self.view
 
@@ -797,7 +808,7 @@ class Track:
             return self.rating
 
 
-@ignore_stale
+
 class FavouriteButton(discord.ui.Button):
     def __init__(self, ranking: int, track: Track, **kwargs):
         self.track = track
@@ -817,7 +828,7 @@ class FavouriteButton(discord.ui.Button):
             emoji=medal,
             **kwargs,
         )
-
+    @ignore_stale
     async def callback(self, ctx: discord.Interaction):
         view: SongRatingView = self.view
 
@@ -835,7 +846,7 @@ class FavouriteButton(discord.ui.Button):
         await view.showTrackAndRating(ctx)
 
 
-@ignore_stale
+
 class QuickFlagButton(discord.ui.Button):
     def __init__(self, flagID: str, track: Track, **kwargs):
         self.track = track
@@ -865,68 +876,21 @@ class QuickFlagButton(discord.ui.Button):
             **kwargs,
         )
 
+    @ignore_stale
     async def callback(self, ctx: discord.Interaction):
         view: SongRatingView = self.view
 
-        database = LocalDatabase(database="albumratings")
+        _seedFlags(self.track, view.album.createdBy.id)
 
-        rawFlags = database.get(
-            "SELECT * FROM `trackFlags` WHERE trackID = ? AND raterID = ?",
-            params=(self.track.spotifyID, view.album.createdBy.id),
-        )
-
-        if rawFlags and len(rawFlags) > 0:
-            parsedFlags = [pickle.loads(flag[8]) for flag in rawFlags]
-
-            for flag in parsedFlags:
-                if flag.id == self.flag.id:
-                    # Flag already exists, so remove it
-                    database.setOne(
-                        "DELETE FROM `trackFlags` WHERE flagID = ? AND trackID = ? AND raterID = ?",
-                        params=(
-                            self.flag.id,
-                            self.track.spotifyID,
-                            view.album.createdBy.id,
-                        ),
-                    )
-
-                    self.track.flags = [
-                        f
-                        for f in getattr(self.track, "flags", [])
-                        if f.id != self.flag.id
-                    ]
-
-                    await view.showTrackAndRating(ctx)
-                    return
-
-        serializedFlag = pickle.dumps(self.flag)
-
-        database.setOne(
-            "INSERT INTO `trackFlags` (`flagID`, `trackID`, `trackName`, `albumID`, `albumName`, `raterID`, `dateAdded`, `artistName`, `serializedFlag`, rating) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            params=(
-                self.flag.id,
-                self.track.spotifyID,
-                self.track.name,
-                view.album.spotifyID,
-                view.album.name,
-                view.album.createdBy.id,
-                dates.formatSimpleDate(
-                    dates.simpleDateObj(timeNow=True), databaseDate=True
-                ),
-                self.track.getArtists(True),
-                serializedFlag,
-                view.album.ratingID,
-            ),
-        )
-
-        self.track.flags = (
-            self.track.flags if hasattr(self.track, "flags") else []
-        ) + [self.flag]
+        if any(f.id == self.flag.id for f in self.track.flags):
+            self.track.flags = [f for f in self.track.flags if f.id != self.flag.id]
+        else:
+            self.track.flags.append(self.flag)
 
         await view.showTrackAndRating(ctx)
 
 
-@ignore_stale
+
 class ExcludeFromRatingButton(discord.ui.Button):
     def __init__(self, track: Track, **kwargs):
         self.track = track
@@ -938,6 +902,7 @@ class ExcludeFromRatingButton(discord.ui.Button):
             **kwargs,
         )
 
+    @ignore_stale
     async def callback(self, ctx: discord.Interaction):
         view: SongRatingView = self.view
 
@@ -950,7 +915,7 @@ class ExcludeFromRatingButton(discord.ui.Button):
         await view.showTrackAndRating(ctx)
 
 
-@ignore_stale
+
 class ClearFavouriteButton(discord.ui.Button):
     def __init__(self, track: Track, **kwargs):
         self.track = track
@@ -962,6 +927,7 @@ class ClearFavouriteButton(discord.ui.Button):
             **kwargs,
         )
 
+    @ignore_stale
     async def callback(self, ctx: discord.Interaction):
         view: SongRatingView = self.view
 
@@ -1282,7 +1248,7 @@ class Album:
             )
 
 
-@ignore_stale
+
 class EditCommentsButton(discord.ui.Button):
     def __init__(self, label: str, obj: Album | Track, **kwargs):
         self.obj = obj
@@ -1290,12 +1256,12 @@ class EditCommentsButton(discord.ui.Button):
         super().__init__(
             label=label, style=discord.ButtonStyle.secondary, emoji="💬", **kwargs
         )
-
+    @ignore_stale
     async def callback(self, ctx: discord.ApplicationContext):
         await ctx.response.send_modal(EditCommentsModal(self.obj, self.view))
 
 
-@ignore_stale
+
 class CustomAlbumCoverButton(discord.ui.Button):
     def __init__(self, obj: Album, **kwargs):
         self.obj = obj
@@ -1307,6 +1273,7 @@ class CustomAlbumCoverButton(discord.ui.Button):
             **kwargs,
         )
 
+    @ignore_stale
     async def callback(self, ctx: discord.ApplicationContext):
         await ctx.response.send_modal(CustomAlbumCoverModal(self.obj, self.view))
 
@@ -1747,3 +1714,42 @@ def sortByRating(result: SmallRating) -> float:
     score, outOf = float(rawRating[0]), float(rawRating[1])
 
     return score / outOf
+
+def commitTrackFlags(album: Album) -> None:
+    """Persist staged flags. Call only after the rating is finished, not cancelled."""
+    database = LocalDatabase(database="albumratings")
+    raterID = album.createdBy.id
+    now = dates.formatSimpleDate(dates.simpleDateObj(timeNow=True), databaseDate=True)
+
+    for track in album.tracks:
+        if not hasattr(track, "flags"):
+            continue  # never touched this session
+
+        # Remember original dates so edits don't reset them
+        existing = database.get(
+            "SELECT * FROM `trackFlags` WHERE trackID = ? AND raterID = ?",
+            params=(track.spotifyID, raterID),
+        )
+        oldDates = {row[0]: row[6] for row in existing} if existing else {}
+
+        database.setOne(
+            "DELETE FROM `trackFlags` WHERE trackID = ? AND raterID = ?",
+            params=(track.spotifyID, raterID),
+        )
+
+        for flag in track.flags:
+            database.setOne(
+                "INSERT INTO `trackFlags` (`flagID`, `trackID`, `trackName`, `albumID`, `albumName`, `raterID`, `dateAdded`, `artistName`, `serializedFlag`, rating) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                params=(
+                    flag.id,
+                    track.spotifyID,
+                    track.name,
+                    album.spotifyID,
+                    album.name,
+                    raterID,
+                    oldDates.get(flag.id, now),
+                    track.getArtists(True),
+                    pickle.dumps(flag),
+                    album.ratingID,
+                ),
+            )
