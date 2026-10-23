@@ -14,6 +14,7 @@ from src.cogs.commands.albumratings import AlbumRatings
 from src.classes import *
 
 from src import constants
+import functools
 
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
@@ -26,7 +27,6 @@ def _get_spotify_client() -> spotipy.Spotify:
             client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET
         )
     )
-
 
 # Timeouts in mins.
 TIMEOUT_TO_PICK_ALBUM = 1 * (60)
@@ -47,6 +47,20 @@ COMMENT_LENGTH_CHARACTER_LIMIT = 1000
 COMMENT_LENGTH_CHARACTER_LIMIT_IN_EMBED = 200
 
 FAST_NAV_SKIP_AMOUNT = 3
+
+
+def ignore_stale(func):
+    """Skip clicks on buttons from an outdated render (item.view is None)."""
+    @functools.wraps(func)
+    async def wrapper(self, ctx: discord.Interaction):
+        if self.view is None:
+            try:
+                await ctx.response.defer()
+            except discord.HTTPException:
+                pass
+            return
+        return await func(self, ctx)
+    return wrapper
 
 
 class Artist:
@@ -337,6 +351,7 @@ class CancelConfirmView(discord.ui.View):
             await ctx.delete_original_response()
 
 
+@ignore_stale
 class CancelButton(discord.ui.Button):
     def __init__(self, **kwargs):
         super().__init__(
@@ -411,7 +426,7 @@ class DuplicateRatingConfirmationView(discord.ui.View):
 
         await interaction.response.defer()
 
-
+@ignore_stale
 class SaveRatingButton(discord.ui.Button):
     def __init__(self, **kwargs):
         super().__init__(
@@ -427,7 +442,7 @@ class SaveRatingButton(discord.ui.Button):
 
         await ctx.response.defer()
 
-
+@ignore_stale
 class NextTrackButton(discord.ui.Button):
     def __init__(self, **kwargs):
         super().__init__(
@@ -443,6 +458,7 @@ class NextTrackButton(discord.ui.Button):
             await view.showTrackAndRating(ctx)
 
 
+@ignore_stale
 class AlbumNavigationButton(discord.ui.Button):
     def __init__(self, skipAmount: int, **kwargs):
         super().__init__(
@@ -645,6 +661,7 @@ class SongRatingView(discord.ui.View):
         self.stop()
 
 
+@ignore_stale
 class SelectSongRating(discord.ui.Select):
     def __init__(self, track: "Track", **kwargs):
         self.track = track
@@ -780,6 +797,7 @@ class Track:
             return self.rating
 
 
+@ignore_stale
 class FavouriteButton(discord.ui.Button):
     def __init__(self, ranking: int, track: Track, **kwargs):
         self.track = track
@@ -817,6 +835,7 @@ class FavouriteButton(discord.ui.Button):
         await view.showTrackAndRating(ctx)
 
 
+@ignore_stale
 class QuickFlagButton(discord.ui.Button):
     def __init__(self, flagID: str, track: Track, **kwargs):
         self.track = track
@@ -907,6 +926,7 @@ class QuickFlagButton(discord.ui.Button):
         await view.showTrackAndRating(ctx)
 
 
+@ignore_stale
 class ExcludeFromRatingButton(discord.ui.Button):
     def __init__(self, track: Track, **kwargs):
         self.track = track
@@ -930,6 +950,7 @@ class ExcludeFromRatingButton(discord.ui.Button):
         await view.showTrackAndRating(ctx)
 
 
+@ignore_stale
 class ClearFavouriteButton(discord.ui.Button):
     def __init__(self, track: Track, **kwargs):
         self.track = track
@@ -1261,6 +1282,7 @@ class Album:
             )
 
 
+@ignore_stale
 class EditCommentsButton(discord.ui.Button):
     def __init__(self, label: str, obj: Album | Track, **kwargs):
         self.obj = obj
@@ -1273,6 +1295,7 @@ class EditCommentsButton(discord.ui.Button):
         await ctx.response.send_modal(EditCommentsModal(self.obj, self.view))
 
 
+@ignore_stale
 class CustomAlbumCoverButton(discord.ui.Button):
     def __init__(self, obj: Album, **kwargs):
         self.obj = obj
