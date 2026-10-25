@@ -7,6 +7,7 @@ services:
     working_dir: /app
     volumes:
       - .:/app
+      # Idk if this did anything lol vv
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
     environment:
