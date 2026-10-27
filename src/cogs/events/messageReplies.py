@@ -49,24 +49,9 @@ SINGLETON_REPLIES = {
     ],
     r"\b(tory)|(mckay)\b": [
         "https://files.brendenian.net/BRNDN/cliznyth.png",
-    ],
-    r"(epstien)|(\befn\b)": [
-        "https://files.brendenian.net/BRNDN/u8ddaixb.png",
-        "https://files.brendenian.net/BRNDN/joytqjqa.jpg",
-        "https://files.brendenian.net/BRNDN/bvzplkzn.jpg",
-        "https://files.brendenian.net/BRNDN/ehpcuria.jpg",
-        "https://files.brendenian.net/BRNDN/arx5hsft.jpg",
-        "https://files.brendenian.net/BRNDN/zd2or99v.jpg",
-        "https://files.brendenian.net/BRNDN/gayfaocd.jpg",
-        "https://files.brendenian.net/BRNDN/8gyk9yxm.jpg",
-        "https://files.brendenian.net/BRNDN/sm1fjvj1.webp",
-        "https://files.brendenian.net/BRNDN/4dktvvza.jpg",
-        "https://files.brendenian.net/BRNDN/oyevrcps.jpg",
-        "https://files.brendenian.net/BRNDN/dqhfpnsb.jpg",
-        "https://files.brendenian.net/BRNDN/xe0lpijj.webp",
-        "https://files.brendenian.net/BRNDN/gpketh0n.jpg",
-        "https://files.brendenian.net/BRNDN/jllqmtxy.png",
-    ],
+        "https://files.brendenian.net/BRNDN/61AXf5.png",
+        "https://files.brendenian.net/BRNDN/H8v1zH.png",
+    ]
 }
 
 
