@@ -51,6 +51,15 @@ SINGLETON_REPLIES = {
         "https://files.brendenian.net/BRNDN/cliznyth.png",
         "https://files.brendenian.net/BRNDN/61AXf5.png",
         "https://files.brendenian.net/BRNDN/H8v1zH.png",
+        """
+        Do you want a Deputy Mayor with a proven record of business success and strong decision-making?
+
+Do you want a Deputy Mayor experienced in budgeting multiple projects responsibly?
+
+Do you want a Deputy Mayor committed to transparent and fair tendering for all jobs?
+
+Do you want a Deputy Mayor with an established track record of leadership and community results?
+        """
     ]
 }
 
